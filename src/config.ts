@@ -14,15 +14,15 @@ export const TZ = 'America/Los_Angeles';
 export const EMAIL_TO = 'darrinjco@gmail.com';
 
 /**
- * Sending identity. Resend requires a domain with verified SPF and DKIM before
- * Gmail will reliably keep this out of the spam folder. `resend.dev` is the
- * shared testing sender and is NOT good enough for an alarm-clock email that
- * has to land 87 mornings running — set a real domain here before Phase 7.
+ * Sending identity. clubmode.ai still needs SPF and DKIM records added in
+ * Resend before Gmail will reliably keep this out of the spam folder — that
+ * happens in Phase 7 and it is not optional for an email that has to land 87
+ * mornings running.
  */
-export const EMAIL_FROM = process.env.EMAIL_FROM ?? 'Nationals <onboarding@resend.dev>';
+export const EMAIL_FROM = process.env.EMAIL_FROM ?? 'Nationals <coach@clubmode.ai>';
 
 /** Public origin. Day links in the email are permanent and must never change. */
-export const SITE_ORIGIN = process.env.SITE_ORIGIN ?? 'https://nationals.pages.dev';
+export const SITE_ORIGIN = process.env.SITE_ORIGIN ?? 'https://nationals.clubmode.ai';
 
 /** The hour, in TZ local wall-clock time, the email should arrive. */
 export const SEND_HOUR = 5;

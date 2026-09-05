@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "validate": "tsx scripts/validate-plan.ts"
+    "validate": "tsx scripts/validate-plan.ts",
+    "check:day": "node scripts/day-check.mjs"
   },
   "dependencies": {
     "next": "15.5.25",
