@@ -4,6 +4,9 @@ import { PLAN, getDay, dayNumber, daysUntilNationals, neighbours } from '@/data/
 import { requireExercise } from '@/data/exercises';
 import { Illustration } from '@/components/illustrations/render';
 import { DayView, type ExerciseMap, type IllustrationMap } from '@/components/day/DayView';
+import { GuidedSequence } from '@/components/day/GuidedSequence';
+import { TestDay } from '@/components/day/TestDay';
+import { MatchDay } from '@/components/day/MatchDay';
 import { formatDate } from '@/lib/format';
 
 /** All 87 days are built at build time. Nothing about a day page is fetched. */
@@ -45,6 +48,31 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
   }
 
   const { prev, next } = neighbours(date);
+
+  // Four shapes of day, because four kinds of session need four kinds of screen.
+  if (day.sessionType === 'match') {
+    return (
+      <main>
+        <MatchDay day={day} exercises={exercises} illustrations={illustrations} prev={prev} />
+      </main>
+    );
+  }
+
+  if (day.isTestDay) {
+    return (
+      <main>
+        <TestDay day={day} label={day.title.replace(/^Recovery \+ /, '')} />
+      </main>
+    );
+  }
+
+  if (day.sessionType === 'mobility' || day.sessionType === 'recovery') {
+    return (
+      <main>
+        <GuidedSequence day={day} exercises={exercises} illustrations={illustrations} prev={prev} next={next} />
+      </main>
+    );
+  }
 
   return (
     <main>

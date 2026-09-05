@@ -17,17 +17,41 @@ That file is the source of truth; nothing in the app invents sets or reps.
 | `src/data/types.ts` | Domain types |
 | `src/data/exercises.ts` | 50-entry exercise library |
 | `src/data/plan.ts` | All 87 day entries |
-| `scripts/validate-plan.ts` | The gate — run before trusting the data |
+| `src/components/illustrations/` | `Figure.tsx` primitives + 50 exercise SVGs |
+| `src/components/day/` | The day page, guided sequence, test form, match day |
+| `worker/` | The 5 AM sender: hourly cron, KV send log, Resend |
+| `scripts/` | Validators and browser checks |
+
+## Screens
+
+| Route | What |
+|---|---|
+| `/` | Resolves today in your timezone and redirects |
+| `/day/[date]` | The session. Four layouts by session type. |
+| `/progress` | Streak, 84-day grid, session breakdown, test charts |
+| `/plan` | All twelve weeks, scannable, with completion state |
+| `/exercise/[id]` | Full detail plus every day it appears |
+| `/dev/illustrations` | Review gallery for the figure system |
 
 ## Commands
 
 ```bash
-npm run dev        # local dev server
-npm run build      # production build
-npm run validate   # assert the plan data is complete and consistent
-npm run check:day  # interaction checks against a running dev server
-npx tsx scripts/spot.ts 2026-10-19    # print a day's prescription
+npm run dev            # local dev server
+npm run build          # static export to out/, then generate out/sw.js
+npm run check          # validate + typecheck (app and worker) + lint + dry run
+npm run dry            # send decisions across the DST boundary, no network
+
+# browser checks — need a server running
+node scripts/serve-out.mjs 4321   # serve out/ the way Pages does
+npm run check:day                 # 17 interaction checks on the day page
+npm run check:pwa                 # offline: cut the network, confirm it works
+node scripts/illo-bounds.mjs      # no illustration escapes its viewBox
+
+npx tsx scripts/spot.ts 2026-10-19            # print a day's prescription
+npx tsx scripts/email-preview.mts ./preview   # render the emails to HTML + PNG
 ```
+
+Deployment is in [DEPLOY.md](./DEPLOY.md).
 
 ## Calendar
 
@@ -84,3 +108,28 @@ exactly that.
 Every date and hour decision goes through `Intl.DateTimeFormat` with a named
 zone (`src/lib/today.ts`). No offset arithmetic anywhere. US DST ends Sunday
 Nov 1 2026, mid-block: 12:00 UTC is 5 AM local on Oct 31 but 4 AM on Nov 1.
+
+## Offline
+
+A generated service worker (`scripts/build-sw.mjs`) precaches the shell on
+install — about 1.2 MB, blocking — then pulls all 87 day pages, all 50 exercise
+pages and every illustration in the background on activate. `npm run check:pwa`
+proves it by cutting the network and loading a day page that was never opened
+while online.
+
+## The 5 AM email
+
+`worker/` is a Cloudflare Worker on an **hourly** cron. It asks
+`Intl.DateTimeFormat` what the local wall clock says and only sends when that
+reads 5. A fixed daily UTC cron would start sending at 4 AM local the moment
+DST ends on Nov 1 2026 and keep doing it for the last four weeks of the block.
+
+- `sent:YYYY-MM-DD` in KV is written **only after** Resend confirms. Running the
+  worker twice in an hour sends once.
+- If all three send attempts fail, no `sent:` key is written, and the 6 AM tick
+  sends a catch-up. One late email beats no email.
+- `GET /?dry=1[&at=<iso>]` runs the whole decision and returns what would be
+  sent, without sending.
+- `GET /health` returns the last seven days, so a missed morning is diagnosable
+  in ten seconds.
+- Dec 1 sends one program-complete note. Nothing sends after that.

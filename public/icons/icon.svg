@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#0a1114"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.2" markerHeight="4.2" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#ff5a1e"/>
+    </marker>
+  </defs>
+  <!-- The motion arc, the app's own signature mark. -->
+  <path d="M 132 358 Q 196 176 380 168" fill="none" stroke="#ff5a1e" stroke-width="30" stroke-linecap="round" marker-end="url(#a)"/>
+  <!-- Ground line, as on every illustration. -->
+  <line x1="118" y1="404" x2="394" y2="404" stroke="#2b3b44" stroke-width="18" stroke-linecap="round"/>
+</svg>

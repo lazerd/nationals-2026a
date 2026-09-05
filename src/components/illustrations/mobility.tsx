@@ -11,6 +11,7 @@ import {
   hand,
   foot,
   halfKneeling,
+  aim,
   planted,
   GROUND_Y,
   type Pose,
@@ -67,7 +68,7 @@ export function CrossBodyShoulderStretch() {
 export function SleeperStretch() {
   // Side-lying, bottom arm out in front, forearm pressed toward the floor.
   const start: Pose = {
-    hip: [96, 132],
+    hip: [88, 132],
     torso: 276,
     legs: [
       { upper: 104, lower: 44, far: true },
@@ -197,37 +198,53 @@ export function HipFlexorStretch() {
 }
 
 export function ThoracicRotationQuadruped() {
-  // On hands and knees with the hips sat back, one hand behind the head.
-  const under: Pose = {
-    hip: [102, 118],
-    torso: 260,
-    legs: [
-      { upper: 128, lower: 178, far: true },
-      { upper: 126, lower: 176 },
-    ],
-    arms: [
-      { upper: 4, lower: 4, far: true },
-      { upper: -54, lower: 34, accent: true },
-    ],
+  // On hands and knees with the hips sat back. Built from the four points that
+  // define the position — knee and hand on the floor, hip and shoulder above
+  // them — so the limbs actually reach the ground.
+  const HIP: [number, number] = [66, 118];
+  const KNEE: [number, number] = [62, 148];
+  const SHIN_END: [number, number] = [38, 152];
+  const SHOULDER: [number, number] = [114, 116];
+  const HAND: [number, number] = [122, 150];
+
+  const build = (elbow: [number, number], hand: [number, number], headAngle: number): Pose => {
+    const t = aim(HIP, SHOULDER);
+    const thigh = aim(HIP, KNEE);
+    const shin = aim(KNEE, SHIN_END);
+    const supportUpper = aim(SHOULDER, [118, 132]);
+    const supportLower = aim([118, 132], HAND);
+    const freeUpper = aim(SHOULDER, elbow);
+    const freeLower = aim(elbow, hand);
+    return {
+      hip: HIP,
+      torso: t.angle,
+      torsoLen: t.len,
+      headAngle,
+      legs: [
+        { upper: thigh.angle + 5, lower: shin.angle + 5, far: true, upperLen: thigh.len, lowerLen: shin.len },
+        { upper: thigh.angle, lower: shin.angle, upperLen: thigh.len, lowerLen: shin.len },
+      ],
+      arms: [
+        { upper: supportUpper.angle, lower: supportLower.angle, far: true, upperLen: supportUpper.len, lowerLen: supportLower.len },
+        { upper: freeUpper.angle, lower: freeLower.angle, accent: true, upperLen: freeUpper.len, lowerLen: freeLower.len },
+      ],
+    };
   };
-  const open: Pose = {
-    ...under,
-    torso: 250,
-    arms: [
-      { upper: 4, lower: 4, far: true },
-      { upper: -186, lower: -128, accent: true },
-    ],
-  };
+
+  // Elbow down and under toward the opposite wrist, then up toward the ceiling.
+  const under = build([98, 142], [116, 128], 18);
+  const open = build([104, 64], [120, 94], -26);
+
   return (
-    <ExerciseSvg uid="t-quad" title="Quadruped thoracic rotation: on hands and knees with the hips sat back and one hand behind the head, the elbow rotates down and under, then up toward the ceiling.">
-      <GroundLine panel={0} />
-      <GroundLine panel={1} />
+    <ExerciseSvg uid="t-quad" title="Quadruped thoracic rotation: on hands and knees with the hips sat back and one hand behind the head, the elbow rotates down and under, then up toward the ceiling with the eyes following it.">
+      <GroundLine panel={0} inset={8} />
+      <GroundLine panel={1} inset={8} />
       <Panel index={0}>
         <Figure pose={under} />
       </Panel>
       <Panel index={1}>
         <Figure pose={open} />
-        <MotionArc from={[112, 116]} to={[104, 52]} bow={22} uid="t-quad" />
+        <MotionArc from={[100, 140]} to={[104, 62]} bow={26} uid="t-quad" />
       </Panel>
     </ExerciseSvg>
   );

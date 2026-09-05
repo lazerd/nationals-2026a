@@ -1,0 +1,27 @@
+name = "nationals-email"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+# Hourly, not daily. The worker decides for itself whether it is 5 AM where the
+# user is — see src/index.ts. A fixed UTC hour would silently start sending at
+# 4 AM local the moment DST ends on Nov 1 2026.
+[triggers]
+crons = ["0 * * * *"]
+
+[vars]
+TZ = "America/Los_Angeles"
+EMAIL_TO = "darrinjco@gmail.com"
+EMAIL_FROM = "Nationals <coach@clubmode.ai>"
+SITE_ORIGIN = "https://nationals.clubmode.ai"
+SEND_HOUR = "5"
+
+# Send log only. A handful of tiny keys, well inside the free tier.
+#   sent:YYYY-MM-DD    written only after a confirmed successful send
+#   log:YYYY-MM-DD     the outcome, for /health
+#   error:YYYY-MM-DD   the last failure reason
+[[kv_namespaces]]
+binding = "LOG"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# RESEND_API_KEY is a secret, not a var:
+#   npx wrangler secret put RESEND_API_KEY

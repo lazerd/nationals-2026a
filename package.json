@@ -4,11 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/build-sw.mjs",
     "start": "next start",
     "lint": "eslint",
     "validate": "tsx scripts/validate-plan.ts",
-    "check:day": "node scripts/day-check.mjs"
+    "check:day": "node scripts/day-check.mjs",
+    "dry": "tsx scripts/worker-dry.mts",
+    "typecheck:worker": "tsc --noEmit -p worker/tsconfig.json",
+    "check": "npm run validate && tsc --noEmit && npm run typecheck:worker && npm run lint && npm run dry",
+    "check:pwa": "node scripts/pwa-check.mjs"
   },
   "dependencies": {
     "next": "15.5.25",

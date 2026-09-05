@@ -8,6 +8,7 @@ import { ExerciseCard } from './ExerciseCard';
 import { ExerciseSheet } from './ExerciseSheet';
 import { Collapsible } from './Collapsible';
 import { ProgressRail } from './ProgressRail';
+import Link from 'next/link';
 
 export type ExerciseMap = Record<string, Exercise>;
 export type IllustrationMap = Record<string, React.ReactNode>;
@@ -140,16 +141,16 @@ export function DayView({
 
       <nav className="mt-8 flex items-center justify-between border-t border-line pt-3 text-[14px]">
         {prev ? (
-          <a href={`/day/${prev}`} className="tap flex items-center pr-3 text-ink-quiet">
+          <Link href={`/day/${prev}`} className="tap flex items-center pr-3 text-ink-quiet">
             ← Yesterday
-          </a>
+          </Link>
         ) : (
           <span />
         )}
         {next ? (
-          <a href={`/day/${next}`} className="tap flex items-center pl-3 text-ink-quiet">
+          <Link href={`/day/${next}`} className="tap flex items-center pl-3 text-ink-quiet">
             Tomorrow →
-          </a>
+          </Link>
         ) : (
           <span />
         )}

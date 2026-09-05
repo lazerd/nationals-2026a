@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { localToday } from '@/lib/today';
+import Link from 'next/link';
 
 export function HomeRedirect({ first, last, dates }: { first: string; last: string; dates: string[] }) {
   const [today, setToday] = useState<string | null>(null);
@@ -28,16 +29,16 @@ export function HomeRedirect({ first, last, dates }: { first: string; last: stri
           ? `The block runs ${first} to ${last}. Day one opens on ${first}.`
           : `The block ran ${first} to ${last}. Nationals is behind you.`}
       </p>
-      <a
+      <Link
         href={`/day/${before ? first : last}`}
         className="tap mt-6 flex items-center justify-center rounded-lg text-[16px] font-semibold"
         style={{ height: 52, background: 'var(--accent)', color: 'var(--accent-ink)' }}
       >
         {before ? 'Look at day one' : 'Look at the last day'}
-      </a>
-      <a href="/plan" className="tap mt-3 flex items-center justify-center rounded-lg border border-line text-[14px] text-ink-quiet">
+      </Link>
+      <Link href="/plan" className="tap mt-3 flex items-center justify-center rounded-lg border border-line text-[14px] text-ink-quiet">
         See the whole plan
-      </a>
+      </Link>
     </main>
   );
 }
