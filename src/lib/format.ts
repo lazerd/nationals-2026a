@@ -6,7 +6,7 @@ import type { SetPrescription } from '@/data/types';
  * qualifier ("each side", "hold") carries the rest underneath it.
  */
 export function prescriptionParts(s: SetPrescription): { primary: string; qualifier: string } {
-  const amount = s.reps !== undefined ? String(s.reps) : `${s.seconds}s`;
+  const amount = amountOf(s);
   const isHold = s.reps === undefined;
 
   if (s.sets > 1) {
@@ -23,9 +23,19 @@ export function prescriptionParts(s: SetPrescription): { primary: string; qualif
 
 /** A one-line version for the collapsed warm-up and finisher rows, and the email. */
 export function prescriptionLine(s: SetPrescription): string {
-  const amount = s.reps !== undefined ? String(s.reps) : `${s.seconds}s`;
-  const core = s.sets > 1 ? `${s.sets}×${amount}` : amount;
+  const core = s.sets > 1 ? `${s.sets}×${amountOf(s)}` : amountOf(s);
   return s.perSide ? `${core}/side` : core;
+}
+
+/**
+ * Reps stay reps; short holds stay seconds because that is how they are
+ * coached. Anything two minutes or longer becomes minutes — "780s" is not
+ * something anyone reads at 5 AM.
+ */
+function amountOf(s: SetPrescription): string {
+  if (s.reps !== undefined) return String(s.reps);
+  const secs = s.seconds ?? 0;
+  return secs >= 120 ? `${Math.round(secs / 60)} min` : `${secs}s`;
 }
 
 /** Total sets a block asks for, counting each side separately. */

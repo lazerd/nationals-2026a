@@ -20,7 +20,10 @@ const ACCENT = '#ff5a1e';
 const ACCENT_INK = '#0a1114';
 
 function prescriptionLine(sets: number, reps?: number, seconds?: number, perSide?: boolean): string {
-  const amount = reps !== undefined ? String(reps) : `${seconds}s`;
+  // Long durations read as minutes. "Easy Aerobic Flush 780s" is not something
+  // anyone parses on a lock screen at 5 AM.
+  const amount =
+    reps !== undefined ? String(reps) : (seconds ?? 0) >= 120 ? `${Math.round((seconds ?? 0) / 60)} min` : `${seconds}s`;
   const core = sets > 1 ? `${sets}×${amount}` : amount;
   return perSide ? `${core}/side` : core;
 }
@@ -96,12 +99,12 @@ export function htmlFor(day: Day, origin: string): string {
         .filter(Boolean)
         .join(' &middot; ');
 
-  const rows = isMatch
-    ? ''
-    : `
+  // Match morning still lists the warm-up: the plain-text alternative always
+  // did, and he should not have to tap to see four items.
+  const rows = `
             <tr>
               <td style="padding:26px 24px 0 24px;">
-                <p style="margin:0 0 10px 0;font-family:${font};font-size:13px;line-height:18px;color:${QUIET};">What&rsquo;s in it</p>
+                <p style="margin:0 0 10px 0;font-family:${font};font-size:13px;line-height:18px;color:${QUIET};">${isMatch ? 'Warm-up' : 'What&rsquo;s in it'}</p>
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                   ${mainNames(day)
                     .map(
