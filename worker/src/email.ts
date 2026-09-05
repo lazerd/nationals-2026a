@@ -44,7 +44,18 @@ function mainNames(day: Day): { name: string; amount: string }[] {
   }));
 }
 
-export function textFor(day: Day, origin: string): string {
+/**
+ * Cues for each main-work movement, for the bridge email that has to stand on
+ * its own while the site is not yet deployed.
+ */
+function mainCues(day: Day): { name: string; cues: string[] }[] {
+  return day.main.map((s) => {
+    const ex = requireExercise(s.exerciseId);
+    return { name: ex.name.replace(/\s*\(.*\)$/, ''), cues: ex.cues };
+  });
+}
+
+export function textFor(day: Day, origin: string, inlineCues = false): string {
   const url = `${origin}/day/${day.date}`;
   const out = day.sessionType === 'match'
     ? [
@@ -70,6 +81,14 @@ export function textFor(day: Day, origin: string): string {
         '',
         `${daysUntilNationals(day.date)} days to Nationals.`,
       ];
+
+  if (inlineCues && day.sessionType !== 'match') {
+    out.push('', 'Cues:');
+    for (const { name, cues } of mainCues(day)) {
+      out.push(`  ${name}`);
+      for (const c of cues) out.push(`    - ${c}`);
+    }
+  }
   return out.join('\n');
 }
 
@@ -82,7 +101,7 @@ const button = (url: string, label: string) => `
                 </tr>
               </table>`;
 
-export function htmlFor(day: Day, origin: string): string {
+export function htmlFor(day: Day, origin: string, inlineCues = false): string {
   const url = `${origin}/day/${day.date}`;
   const n = dayNumber(day.date);
   const out = daysUntilNationals(day.date);
@@ -154,6 +173,20 @@ export function htmlFor(day: Day, origin: string): string {
           <td style="padding:22px 24px 0 24px;">${button(url, isMatch ? 'Open the warm-up &rarr;' : "Open today's session &rarr;")}</td>
         </tr>
         ${rows}
+        ${
+          inlineCues && !isMatch
+            ? `<tr><td style="padding:26px 24px 0 24px;">
+                <p style="margin:0 0 10px 0;font-family:${font};font-size:13px;line-height:18px;color:${QUIET};">Cues</p>
+                ${mainCues(day)
+                  .map(
+                    (m) => `<p style="margin:0 0 12px 0;font-family:${font};font-size:15px;line-height:22px;color:${INK};"><strong>${m.name}</strong><br>${m.cues
+                      .map((c) => `<span style="color:${QUIET};">${c}</span>`)
+                      .join('<br>')}</p>`,
+                  )
+                  .join('')}
+              </td></tr>`
+            : ''
+        }
         ${day.coachNote ? `<tr><td style="padding:26px 24px 0 24px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr><td width="3" bgcolor="${ACCENT}" style="width:3px;line-height:1px;font-size:0;">&nbsp;</td><td style="padding:2px 0 2px 14px;font-family:${font};font-size:16px;line-height:24px;color:${INK};">${day.coachNote}</td></tr></table></td></tr>` : ''}
         <tr>
           <td style="padding:26px 24px 26px 24px;border-top:1px solid ${LINE};">

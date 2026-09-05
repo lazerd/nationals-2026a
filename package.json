@@ -12,7 +12,8 @@
     "dry": "tsx scripts/worker-dry.mts",
     "typecheck:worker": "tsc --noEmit -p worker/tsconfig.json",
     "check": "npm run validate && tsc --noEmit && npm run typecheck:worker && npm run lint && npm run dry",
-    "check:pwa": "node scripts/pwa-check.mjs"
+    "check:pwa": "node scripts/pwa-check.mjs",
+    "email:today": "tsx scripts/todays-email.mts"
   },
   "dependencies": {
     "next": "15.5.25",
