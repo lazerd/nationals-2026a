@@ -1,12 +1,13 @@
 import { chromium } from 'playwright';
 
+const BASE = process.argv[2] ?? 'http://localhost:3000';
 const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 const ctx = await b.newContext({ viewport: { width: 375, height: 700 }, deviceScaleFactor: 2 });
 const p = await ctx.newPage();
 const log = [];
 const ok = (label, cond, extra = '') => log.push(`${cond ? 'PASS' : 'FAIL'}  ${label}${extra ? ` · ${extra}` : ''}`);
 
-await p.goto('http://localhost:3000/day/2026-10-19', { waitUntil: 'networkidle' });
+await p.goto(`${BASE}/day/2026-10-19`, { waitUntil: 'networkidle' });
 
 // No horizontal overflow at the iPhone SE floor.
 const overflow = await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
