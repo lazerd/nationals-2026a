@@ -36,3 +36,24 @@ npx tsx scripts/spot.ts 2026-10-19    # print a day's prescription
   mobility, Thu serve B, Fri move B, Sat strength, Sun recovery.
 - **Oct 4 / Nov 1 / Nov 22** — test days.
 - **Nov 30** — Nationals.
+
+## Illustrations
+
+`src/components/illustrations/` — 50 original SVGs, no third-party assets.
+Every figure is composed from `Figure.tsx` primitives at joint angles rather
+than raw path data, so poses stay readable and editable.
+
+- **Angles**: degrees from straight-down, positive clockwise. 0 hangs down,
+  180 points up, -90 points right.
+- **Anchors**: `aim(from, to)` solves the angle and length that lands a joint
+  on an exact point. Lying and propped positions are built this way.
+- **Colour**: CSS variables only (`--illo-figure`, `--illo-accent`, …). No hex
+  inside an SVG, so dark mode and theming work.
+- **Format**: `viewBox="0 0 320 180"`, two panels (start, end), a motion arc
+  between them, `role="img"` and a `<title>` describing the movement.
+
+Review them at `/dev/illustrations`, filterable by `?only=<category>`.
+
+```bash
+node scripts/shot.mjs http://localhost:3000/dev/illustrations out.png
+```

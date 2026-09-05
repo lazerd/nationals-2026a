@@ -1,26 +1,103 @@
 @import "tailwindcss";
 
+/*
+  Palette taken from a hard court under lights before sunrise: blue-black
+  surround, chalk-white lines, and one hot orange that only ever marks the
+  thing that is moving or the thing you are meant to touch.
+*/
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+
+  --ground: #0a1114;
+  --surface: #111a1e;
+  --surface-2: #16222a;
+  --line: #223038;
+  --line-bright: #33454f;
+
+  --ink: #e6edef;
+  --ink-quiet: #7d9199;
+  --ink-faint: #4e6068;
+
+  --accent: #ff5a1e;
+  --accent-ink: #0a1114;
+  --accent-wash: rgba(255, 90, 30, 0.12);
+  --accent-line: rgba(255, 90, 30, 0.4);
+
+  --ok: #4ec9a5;
+  --warn: #e8b73a;
+
+  /* Illustration figure system. Never hardcode hex inside an SVG. */
+  --illo-figure: #607781;
+  --illo-figure-dim: #3d4f58;
+  --illo-accent: var(--accent);
+  --illo-ground: #2b3b44;
+  --illo-equip: #8fa4ad;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-ground: var(--ground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-bright: var(--line-bright);
+  --color-ink: var(--ink);
+  --color-ink-quiet: var(--ink-quiet);
+  --color-ink-faint: var(--ink-faint);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --font-sans: var(--font-archivo);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--ground);
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-archivo), system-ui, sans-serif;
+  font-variation-settings: "wdth" 100;
+  overscroll-behavior-y: none;
+}
+
+/*
+  Scoreboard numerals. Set and rep counts are the largest thing on the screen
+  and they read at arm's length: widened, heavy, tight, and tabular so the
+  digits do not shuffle as a counter ticks.
+*/
+.scoreboard {
+  font-variation-settings: "wdth" 125;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 0.9;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sweaty thumbs, one hand: nothing interactive is smaller than this. */
+.tap {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
