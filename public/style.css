@@ -77,8 +77,9 @@ summary { cursor: pointer; font-weight: 700; color: var(--muted); }
 
 video#preview { display: block; width: 100%; border-radius: 12px; background: #000; max-height: 46vh; }
 .stage { position: relative; }
-.tap-layer { position: absolute; inset: 0; cursor: crosshair; border: 2px solid var(--accent); border-radius: 12px; display: flex; align-items: flex-start; justify-content: center; }
-.tap-layer span { margin-top: 10px; background: var(--accent); color: var(--accent-ink); font-weight: 900; font-size: 13px; padding: 4px 10px; border-radius: 999px; }
+.tap-layer { position: absolute; inset: 0; cursor: crosshair; border: 2px solid var(--accent); border-radius: 12px; display: flex; align-items: flex-end; justify-content: center; }
+/* Prompt at the bottom: SwingVision puts the net and players in the upper part. */
+.tap-layer span { margin-bottom: 10px; pointer-events: none; background: var(--accent); color: var(--accent-ink); font-weight: 900; font-size: 13px; padding: 4px 10px; border-radius: 999px; }
 .tap-dot { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; border: 3px solid var(--accent); box-shadow: 0 0 0 2px rgba(0,0,0,.6); pointer-events: none; }
 .me-panel { background: #081833; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
 .me-panel p { margin: 0 0 4px; font-size: 14px; }

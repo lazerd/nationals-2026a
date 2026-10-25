@@ -219,43 +219,53 @@ function videoPoint(e) {
   return { x, y, px: e.clientX - rect.left, py: e.clientY - rect.top };
 }
 
-function setTapping(on) {
-  state.tapping = on;
-  $('#tap-layer').hidden = !on;
+// Two taps: the player's shirt, then the top of the net (which tells us
+// where the court is and which end is which).
+function setTapping(step) {
+  state.tapping = step;
+  state.tapStep = step;
+  $('#tap-layer').hidden = !step;
+  $('#tap-layer span').textContent = step === 'net' ? 'Now tap the top of the net' : 'Tap your shirt';
   // The sticky button would cover the bottom of the video, where the near
   // players are.
-  document.body.classList.toggle('tapping', on);
+  document.body.classList.toggle('tapping', Boolean(step));
   // Native controls also cover the bottom of the picture.
-  $('#preview').controls = !on;
-  $('#tap-btn').textContent = on ? 'Cancel' : state.source.winners ? 'Not me? Tap again' : 'This is me';
-  if (on) $('.stage').scrollIntoView({ behavior: 'instant', block: 'center' });
+  $('#preview').controls = !step;
+  $('#tap-btn').textContent = step ? 'Cancel' : state.source.winners ? 'Not me? Tap again' : 'This is me';
+  if (step) $('.stage').scrollIntoView({ behavior: 'instant', block: 'center' });
 }
 
 $('#tap-btn').onclick = () => {
   $('#preview').pause();
-  setTapping(!state.tapping);
+  $('#tap-dot').hidden = true;
+  setTapping(state.tapping ? false : 'me');
 };
 
 $('#tap-layer').addEventListener('click', async (e) => {
   const p = videoPoint(e);
   if (p.x < 0 || p.x > 1 || p.y < 0 || p.y > 1) return;
+  if (state.tapStep === 'me') {
+    state.meTap = { t: $('#preview').currentTime, x: p.x, y: p.y };
+    const dot = $('#tap-dot');
+    dot.style.left = `${p.px}px`;
+    dot.style.top = `${p.py}px`;
+    dot.hidden = false;
+    setTapping('net');
+    return;
+  }
   setTapping(false);
-  const dot = $('#tap-dot');
-  dot.style.left = `${p.px}px`;
-  dot.style.top = `${p.py}px`;
-  dot.hidden = false;
   try {
     await api(`/api/sources/${state.source.id}/me`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ t: $('#preview').currentTime, x: p.x, y: p.y }),
+      body: JSON.stringify({ ...state.meTap, netX: p.x, netY: p.y }),
     });
     state.source.identify = { status: 'queued', done: 0, total: state.source.endings.length };
     await watchIdentify();
   } catch (ex) {
     setError($('#build-error'), ex.message);
   } finally {
-    setTimeout(() => { dot.hidden = true; }, 1500);
+    setTimeout(() => { $('#tap-dot').hidden = true; }, 1500);
   }
 });
 

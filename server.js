@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { probe, ffmpeg } from './lib/ffmpeg.js';
 import { analyzeAudio, scoreClip, pointEndings } from './lib/detect.js';
-import { sampleColor, sceneBackground, identifyInClip, winnerLikelihood } from './lib/identify.js';
+import { sampleColor, sceneBackground, analyzeScene, identifyInClip, winnerLikelihood } from './lib/identify.js';
 import { analyzeMotion, playerPath } from './lib/track.js';
 import { ingestLink, IngestError } from './lib/ingest.js';
 import { renderReel, BRAND } from './lib/render.js';
@@ -141,11 +141,13 @@ async function processWinners(s, tap) {
   try {
     const endings = s.endings || [];
     await update({ identify: { status: 'running', done: 0, total: endings.length, step: 'Learning what you look like' } });
-    const color = await sampleColor(s.file, tap.t, tap.x, tap.y);
     const bg = await sceneBackground(s.file, s.info.duration);
+    const color = await sampleColor(s.file, tap.t, tap.x, tap.y, bg);
+    await update({ identify: { status: 'running', done: 0, total: endings.length, step: 'Finding the court' } });
+    const scene = analyzeScene(bg, { x: tap.netX, y: tap.netY });
     const winners = [];
     for (const [i, e] of endings.entries()) {
-      const id = await identifyInClip(s.file, e, color, { bg });
+      const id = await identifyInClip(s.file, e, color, { bg, scene });
       if (id.mySide && e.lastSide === id.mySide) {
         const likelihood = winnerLikelihood(e, id);
         const clip = {
@@ -281,15 +283,14 @@ app.post('/api/sources/:id/me', async (req, res) => {
   if (!s || s.status !== 'ready') return res.status(404).json({ error: 'Not found' });
   if (!s.endings?.length) return res.status(400).json({ error: 'Finding winners needs the match audio, and this video has none.' });
   if (s.identify?.status === 'running') return res.status(409).json({ error: 'Already working on it.' });
-  const t = Number(req.body.t);
-  const x = Number(req.body.x);
-  const y = Number(req.body.y);
-  if (![t, x, y].every(Number.isFinite) || x < 0 || x > 1 || y < 0 || y > 1 || t < 0 || t > s.info.duration) {
-    return res.status(400).json({ error: 'Tap on yourself in the video.' });
+  const [t, x, y, netX, netY] = ['t', 'x', 'y', 'netX', 'netY'].map((k) => Number(req.body[k]));
+  const inFrame = (v) => Number.isFinite(v) && v >= 0 && v <= 1;
+  if (!Number.isFinite(t) || t < 0 || t > s.info.duration || ![x, y, netX, netY].every(inFrame)) {
+    return res.status(400).json({ error: 'Tap on yourself, then on the top of the net.' });
   }
   s.identify = { status: 'queued', done: 0, total: s.endings.length, step: 'Waiting in line' };
   await save(sourceDir(s.id), storedSource(s));
-  enqueue(() => processWinners(s, { t, x, y }));
+  enqueue(() => processWinners(s, { t, x, y, netX, netY }));
   res.status(202).json({ ok: true });
 });
 
