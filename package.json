@@ -1,0 +1,17 @@
+{
+  "name": "clubmode-reels",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ClubMode Reels: turn a SwingVision match into a vertical one-player highlight reel for Instagram and Facebook",
+  "type": "module",
+  "main": "server.js",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "multer": "^2.0.2"
+  }
+}

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ClubMode Reels</title>
+  <meta name="description" content="Turn a SwingVision match into a highlight reel for one player, ready for Instagram and Facebook.">
+  <meta name="theme-color" content="#0B1F3A">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="dot"></span><span id="brand">ClubMode</span> <em>Reels</em></div>
+  </header>
+
+  <main>
+    <!-- 1. Import -->
+    <section id="step-import" class="card">
+      <h1>Make a highlight reel</h1>
+      <p class="lede">Paste a SwingVision share link and pick a player. You'll get a vertical reel ready to post on Instagram or Facebook.</p>
+      <form id="import-form">
+        <label for="url">SwingVision link</label>
+        <input id="url" name="url" type="url" inputmode="url" placeholder="https://swing.vision/matches/…" autocomplete="off">
+        <div class="or"><span>or</span></div>
+        <label class="file">
+          <input id="video" name="video" type="file" accept="video/*">
+          <span id="video-label">Upload the match video</span>
+        </label>
+        <p class="hint">Tip: in SwingVision, open the session → <b>Share Video</b> → <b>Share Link</b>. If the link won't import, save the video to your phone and upload it here.</p>
+        <button class="primary" type="submit">Find highlights</button>
+        <p class="error" id="import-error" hidden></p>
+      </form>
+    </section>
+
+    <!-- 2. Working -->
+    <section id="step-working" class="card" hidden>
+      <h2 id="working-title">Importing match</h2>
+      <div class="bar"><div id="working-bar"></div></div>
+      <p class="muted" id="working-step">Starting…</p>
+    </section>
+
+    <!-- 3. Build -->
+    <section id="step-build" hidden>
+      <div class="card">
+        <h2>Who's the star?</h2>
+        <p class="muted" id="match-title"></p>
+        <label for="player">Player name</label>
+        <input id="player" maxlength="40" placeholder="e.g. Jordan Lee" autocomplete="off">
+        <div id="player-chips" class="chips"></div>
+
+        <label>Where are they in the video?</label>
+        <div class="seg" id="side">
+          <button type="button" data-v="near" class="on">Near side<small>bottom of frame</small></button>
+          <button type="button" data-v="far">Far side<small>across the net</small></button>
+        </div>
+
+        <details>
+          <summary>Style &amp; text</summary>
+          <label for="subtitle">Subtitle</label>
+          <input id="subtitle" maxlength="60" placeholder="e.g. vs. Riverside · USTA Nationals">
+          <label for="club">Club / team</label>
+          <input id="club" maxlength="50" placeholder="e.g. Bay Club Tennis">
+          <label>Framing</label>
+          <div class="seg three" id="layout">
+            <button type="button" data-v="focus" class="on">Focus<small>follows player</small></button>
+            <button type="button" data-v="full">Full court<small>whole point</small></button>
+            <button type="button" data-v="follow">Tight<small>full-screen crop</small></button>
+          </div>
+          <label class="check"><input type="checkbox" id="replay" checked> Slow-mo replay of the best point</label>
+          <label class="file small">
+            <input id="music" type="file" accept="audio/*">
+            <span id="music-label">Add a music track (optional)</span>
+          </label>
+          <p class="hint">Only use music you have the rights to. Instagram may mute copyrighted audio. You can also add music in the Instagram app.</p>
+        </details>
+      </div>
+
+      <div class="card">
+        <div class="row between">
+          <h2>Clips</h2>
+          <span class="pill" id="selection-summary"></span>
+        </div>
+        <p class="muted" id="detect-note"></p>
+        <video id="preview" playsinline controls preload="metadata"></video>
+        <div class="row gap">
+          <button type="button" class="ghost" id="add-moment">+ Add this moment</button>
+          <button type="button" class="ghost" id="auto-pick">Auto-pick best</button>
+          <button type="button" class="ghost" id="clear-pick">Clear</button>
+        </div>
+        <ul id="clips" class="clips"></ul>
+      </div>
+
+      <div class="sticky">
+        <button class="primary" id="render-btn">Make my reel</button>
+        <p class="error" id="build-error" hidden></p>
+      </div>
+    </section>
+
+    <!-- 4. Result -->
+    <section id="step-result" class="card" hidden>
+      <h2>Your reel is ready</h2>
+      <video id="reel" playsinline controls loop></video>
+      <div class="actions">
+        <button class="primary" id="share-btn">Share to Instagram / Facebook</button>
+        <a class="secondary" id="download-btn" download>Download video</a>
+      </div>
+      <label for="caption">Caption</label>
+      <textarea id="caption" rows="4"></textarea>
+      <button class="ghost" id="copy-caption" type="button">Copy caption</button>
+      <p class="hint" id="share-hint">On your phone, <b>Share</b> opens your share sheet. Pick Instagram (Reels or Stories) or Facebook. On a computer, download the video and upload it in Instagram or Facebook.</p>
+      <div class="row gap">
+        <button class="ghost" id="back-btn" type="button">← Change clips</button>
+        <button class="ghost" id="new-btn" type="button">New match</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>
