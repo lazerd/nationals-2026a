@@ -8,7 +8,9 @@ const state = {
   selected: new Set(),
   touched: false, // user edited the selection by hand
   side: 'near',
+  mode: 'winners',
   layout: 'focus',
+  tapping: false,
   reel: null,
   stopAt: null,
 };
@@ -143,16 +145,140 @@ function setupBuild() {
   };
   $('#detect-note').textContent = notes[s.detection] || '';
   $('#preview').src = s.previewUrl;
+  // Winners need the audio of each strike.
+  setMode(s.endings?.length ? 'winners' : 'rallies');
+  $('#mode').querySelector('[data-v=winners]').disabled = !s.endings?.length;
+  if (s.identify?.status === 'running' || s.identify?.status === 'queued') watchIdentify();
+}
+
+function setMode(mode) {
+  state.mode = mode;
+  for (const b of $('#mode').children) b.classList.toggle('on', b.dataset.v === mode);
+  $('#side-wrap').hidden = mode === 'winners';
+  $('#me-panel').hidden = mode !== 'winners';
+  updateMePanel();
+  state.touched = false;
   autoPick();
 }
 
+// Moments the user added by hand show up in both lists.
+function clipList() {
+  if (state.mode !== 'winners') return state.source.clips;
+  return [...(state.source.winners || []), ...state.source.clips.filter((c) => c.manual)].sort((a, b) => a.start - b.start);
+}
+
+function updateMePanel() {
+  const s = state.source;
+  const id = s.identify;
+  const bar = $('#me-bar');
+  const swatch = $('#swatch');
+  bar.hidden = !(id && (id.status === 'running' || id.status === 'queued'));
+  if (!bar.hidden) bar.firstElementChild.style.width = `${Math.round((100 * id.done) / Math.max(1, id.total))}%`;
+  if (s.me?.color) {
+    swatch.hidden = false;
+    swatch.style.background = `rgb(${s.me.color.r},${s.me.color.g},${s.me.color.b})`;
+  }
+  const text = $('#me-text');
+  if (!bar.hidden) {
+    text.innerHTML = `<b>${id.step || 'Working'}…</b> ${id.done}/${id.total} points`;
+  } else if (id?.status === 'error') {
+    text.innerHTML = `<b>That didn't work:</b> ${id.error}. Try tapping again on a frame where you're clearly visible.`;
+  } else if (s.winners) {
+    const mine = s.winners.filter((w) => w.likelihood >= 0.5).length;
+    text.innerHTML = s.winners.length
+      ? `<b>${s.winners.length} points ended by your team.</b> ${mine} look like your shot. Tap a clip to check it, and use ✓ to keep it. Hits into the net or long can show up too, so give them a quick look.`
+      : "<b>No points found for you.</b> Try tapping yourself again on a clearer frame, ideally on your shirt.";
+    $('#tap-btn').textContent = 'Not me? Tap again';
+  }
+  $('#tap-btn').disabled = !bar.hidden;
+}
+
+async function watchIdentify() {
+  updateMePanel();
+  const s = await poll(`/api/sources/${state.source.id}`, (d) => {
+    state.source.identify = d.identify;
+    updateMePanel();
+    return d.identify?.status === 'ready' || d.identify?.status === 'error';
+  });
+  state.source = s;
+  updateMePanel();
+  state.touched = false;
+  if (state.mode === 'winners') autoPick();
+}
+
+// Maps a click on the video to 0..1 coordinates inside the actual picture
+// (the element letterboxes the video).
+function videoPoint(e) {
+  const v = $('#preview');
+  const rect = v.getBoundingClientRect();
+  const scale = Math.min(rect.width / v.videoWidth, rect.height / v.videoHeight);
+  const w = v.videoWidth * scale;
+  const h = v.videoHeight * scale;
+  const x = (e.clientX - rect.left - (rect.width - w) / 2) / w;
+  const y = (e.clientY - rect.top - (rect.height - h) / 2) / h;
+  return { x, y, px: e.clientX - rect.left, py: e.clientY - rect.top };
+}
+
+function setTapping(on) {
+  state.tapping = on;
+  $('#tap-layer').hidden = !on;
+  // The sticky button would cover the bottom of the video, where the near
+  // players are.
+  document.body.classList.toggle('tapping', on);
+  // Native controls also cover the bottom of the picture.
+  $('#preview').controls = !on;
+  $('#tap-btn').textContent = on ? 'Cancel' : state.source.winners ? 'Not me? Tap again' : 'This is me';
+  if (on) $('.stage').scrollIntoView({ behavior: 'instant', block: 'center' });
+}
+
+$('#tap-btn').onclick = () => {
+  $('#preview').pause();
+  setTapping(!state.tapping);
+};
+
+$('#tap-layer').addEventListener('click', async (e) => {
+  const p = videoPoint(e);
+  if (p.x < 0 || p.x > 1 || p.y < 0 || p.y > 1) return;
+  setTapping(false);
+  const dot = $('#tap-dot');
+  dot.style.left = `${p.px}px`;
+  dot.style.top = `${p.py}px`;
+  dot.hidden = false;
+  try {
+    await api(`/api/sources/${state.source.id}/me`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ t: $('#preview').currentTime, x: p.x, y: p.y }),
+    });
+    state.source.identify = { status: 'queued', done: 0, total: state.source.endings.length };
+    await watchIdentify();
+  } catch (ex) {
+    setError($('#build-error'), ex.message);
+  } finally {
+    setTimeout(() => { dot.hidden = true; }, 1500);
+  }
+});
+
 function scoreOf(c) {
-  return c[`score_${state.side}`] ?? 0;
+  if (c.manual) return 100;
+  return c.winner ? c.likelihood : c[`score_${state.side}`] ?? 0;
 }
 
 function autoPick() {
-  const ranked = [...state.source.clips].sort((a, b) => scoreOf(b) - scoreOf(a));
   state.selected = new Set();
+  if (state.mode === 'winners') {
+    // Keep everything that looks like your shot, up to a ~1 minute reel.
+    const ranked = [...clipList()].sort((a, b) => scoreOf(b) - scoreOf(a));
+    let total = 0;
+    for (const c of ranked) {
+      if (scoreOf(c) < 0.5 && state.selected.size >= 3) break;
+      if (total + (c.end - c.start) > 75) break;
+      state.selected.add(c.id);
+      total += c.end - c.start;
+    }
+    return renderClips();
+  }
+  const ranked = [...state.source.clips].sort((a, b) => scoreOf(b) - scoreOf(a));
   let total = 0;
   for (const c of ranked) {
     const d = c.end - c.start;
@@ -167,15 +293,22 @@ function autoPick() {
 function renderClips() {
   const list = $('#clips');
   list.innerHTML = '';
-  const top = new Set([...state.source.clips].sort((a, b) => scoreOf(b) - scoreOf(a)).slice(0, state.source.clips.length > 5 ? 3 : 0).map((c) => c.id));
-  for (const c of state.source.clips) {
+  const items = clipList();
+  const top = new Set([...items].sort((a, b) => scoreOf(b) - scoreOf(a)).slice(0, items.length > 5 ? 3 : 0).map((c) => c.id));
+  for (const c of items) {
     const li = document.createElement('li');
     li.className = `clip${state.selected.has(c.id) ? ' on' : ''}`;
+    let badge = top.has(c.id) ? '<span class="badge">TOP</span>' : '';
+    if (c.winner) {
+      badge = c.likelihood >= 0.6 ? '<span class="badge you">YOU</span>'
+        : c.likelihood >= 0.35 ? '<span class="badge maybe">YOU?</span>'
+          : '<span class="badge partner">PARTNER?</span>';
+    }
     li.innerHTML = `
-      ${top.has(c.id) ? '<span class="badge">TOP</span>' : ''}
+      ${badge}
       <img loading="lazy" alt="" src="${c.thumb || ''}">
       <button class="tick" type="button" aria-label="Include clip">${state.selected.has(c.id) ? '✓' : '+'}</button>
-      <div class="meta"><b>${fmt(c.start)}</b><span>${c.shots ? `${c.shots} shots` : c.manual ? 'added' : ''} · ${Math.round(c.end - c.start)}s</span></div>`;
+      <div class="meta"><b>${fmt(c.start)}</b><span>${c.shots ? `${c.shots} shot${c.shots === 1 ? "" : "s"}` : c.manual ? 'added' : ''} · ${Math.round(c.end - c.start)}s</span></div>`;
     li.querySelector('img').onclick = () => playClip(c);
     li.querySelector('.tick').onclick = () => {
       state.touched = true;
@@ -185,9 +318,9 @@ function renderClips() {
     };
     list.append(li);
   }
-  const chosen = state.source.clips.filter((c) => state.selected.has(c.id));
+  const chosen = items.filter((c) => state.selected.has(c.id));
   const secs = chosen.reduce((n, c) => n + (c.end - c.start), 0);
-  $('#selection-summary').textContent = `${chosen.length} clips · ~${Math.round(secs + 5)}s`;
+  $('#selection-summary').textContent = chosen.length ? `${chosen.length} clips · ~${Math.round(secs + 5)}s` : 'No clips yet';
 }
 
 function playClip(c) {
@@ -204,6 +337,11 @@ $('#preview').addEventListener('timeupdate', (e) => {
   }
 });
 $('#preview').addEventListener('seeking', () => { state.stopAt = null; });
+
+$('#mode').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (b && !b.disabled && b.dataset.v !== state.mode) setMode(b.dataset.v);
+});
 
 for (const group of ['side', 'layout']) {
   $(`#${group}`).addEventListener('click', (e) => {

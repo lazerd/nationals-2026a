@@ -5,7 +5,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { probe, ffmpeg } from './lib/ffmpeg.js';
-import { analyzeAudio, scoreClip } from './lib/detect.js';
+import { analyzeAudio, scoreClip, pointEndings } from './lib/detect.js';
+import { sampleColor, sceneBackground, identifyInClip, winnerLikelihood } from './lib/identify.js';
 import { analyzeMotion, playerPath } from './lib/track.js';
 import { ingestLink, IngestError } from './lib/ingest.js';
 import { renderReel, BRAND } from './lib/render.js';
@@ -122,10 +123,50 @@ async function processSource(s, { link } = {}) {
     await update({ step: `Building ${candidates.length} clip previews` });
     const clips = [];
     for (const c of candidates) clips.push(await makeClip(s, c));
-    await update({ status: 'ready', step: null, detection, clips });
+    // Every exchange's final strike, for "my winners" once the player taps themselves.
+    const endings = audio ? pointEndings(audio.rallies, info.duration) : [];
+    await update({ status: 'ready', step: null, detection, clips, endings });
   } catch (err) {
     console.error(`source ${s.id}:`, err);
     await update({ status: 'error', error: err instanceof IngestError ? err.message : `Processing failed: ${err.message}` });
+  }
+}
+
+// Finds the points the tapped player won: exchanges whose final strike came
+// from their end, ranked by how likely it was their swing rather than their
+// partner's.
+async function processWinners(s, tap) {
+  const dir = sourceDir(s.id);
+  const update = async (patch) => { Object.assign(s, patch); await save(dir, storedSource(s)); };
+  try {
+    const endings = s.endings || [];
+    await update({ identify: { status: 'running', done: 0, total: endings.length, step: 'Learning what you look like' } });
+    const color = await sampleColor(s.file, tap.t, tap.x, tap.y);
+    const bg = await sceneBackground(s.file, s.info.duration);
+    const winners = [];
+    for (const [i, e] of endings.entries()) {
+      const id = await identifyInClip(s.file, e, color, { bg });
+      if (id.mySide && e.lastSide === id.mySide) {
+        const likelihood = winnerLikelihood(e, id);
+        const clip = {
+          id: newId(), start: e.start, end: e.end, shots: e.shots, lastHit: e.lastHit,
+          likelihood, meShare: id.meShare, mySide: id.mySide, keyframes: id.keyframes,
+          label: 'WINNER', winner: true,
+        };
+        try {
+          await thumbnail(s.file, Math.max(0, e.lastHit - 0.15), path.join(dir, `thumb_${clip.id}.jpg`));
+          clip.thumb = `/media/sources/${s.id}/thumb_${clip.id}.jpg`;
+        } catch { /* optional */ }
+        winners.push(clip);
+      }
+      if (i % 3 === 2 || i === endings.length - 1) {
+        await update({ identify: { status: 'running', done: i + 1, total: endings.length, step: 'Checking every point' } });
+      }
+    }
+    await update({ winners, me: { color, ...tap }, identify: { status: 'ready', done: endings.length, total: endings.length } });
+  } catch (err) {
+    console.error(`winners ${s.id}:`, err);
+    await update({ identify: { status: 'error', error: err.message } });
   }
 }
 
@@ -136,7 +177,11 @@ async function processReel(r, s, clips, opts) {
     await update({ status: 'rendering', progress: 0 });
     if (!s.motion) s.motion = JSON.parse(await fs.readFile(path.join(sourceDir(s.id), 'motion.json'), 'utf8'));
     const ordered = clips
-      .map((c) => ({ ...c, score: c[`score_${opts.side}`], keyframes: playerPath(s.motion, opts.side, c.start, c.end).keyframes }))
+      .map((c) => ({
+        ...c,
+        score: c.winner ? c.likelihood : c[`score_${opts.side}`],
+        keyframes: c.keyframes || playerPath(s.motion, opts.side, c.start, c.end).keyframes,
+      }))
       .sort((a, b) => a.start - b.start);
     const out = path.join(dir, 'reel.mp4');
     let last = 0;
@@ -229,13 +274,32 @@ app.post('/api/sources/:id/clips', async (req, res) => {
   res.status(201).json(clip);
 });
 
+// The player taps themselves on a paused frame; we learn their shirt color
+// and look for their winners.
+app.post('/api/sources/:id/me', async (req, res) => {
+  const s = await load(sources, sourceDir, req.params.id);
+  if (!s || s.status !== 'ready') return res.status(404).json({ error: 'Not found' });
+  if (!s.endings?.length) return res.status(400).json({ error: 'Finding winners needs the match audio, and this video has none.' });
+  if (s.identify?.status === 'running') return res.status(409).json({ error: 'Already working on it.' });
+  const t = Number(req.body.t);
+  const x = Number(req.body.x);
+  const y = Number(req.body.y);
+  if (![t, x, y].every(Number.isFinite) || x < 0 || x > 1 || y < 0 || y > 1 || t < 0 || t > s.info.duration) {
+    return res.status(400).json({ error: 'Tap on yourself in the video.' });
+  }
+  s.identify = { status: 'queued', done: 0, total: s.endings.length, step: 'Waiting in line' };
+  await save(sourceDir(s.id), storedSource(s));
+  enqueue(() => processWinners(s, { t, x, y }));
+  res.status(202).json({ ok: true });
+});
+
 app.post('/api/reels', upload.single('music'), async (req, res) => {
   const b = req.body || {};
   const s = await load(sources, sourceDir, b.sourceId);
   if (!s || s.status !== 'ready') return res.status(400).json({ error: 'That match isn\'t ready yet.' });
   let ids;
   try { ids = JSON.parse(b.clipIds || '[]'); } catch { ids = []; }
-  const clips = s.clips.filter((c) => ids.includes(c.id));
+  const clips = [...s.clips, ...(s.winners || [])].filter((c) => ids.includes(c.id));
   if (!clips.length) return res.status(400).json({ error: 'Pick at least one clip.' });
   if (clips.length > 30) return res.status(400).json({ error: 'Pick at most 30 clips.' });
   const playerName = String(b.playerName || '').trim().slice(0, 40);

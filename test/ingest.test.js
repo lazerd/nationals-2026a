@@ -54,3 +54,12 @@ test('rejects private and non-http URLs', async () => {
   await assert.rejects(assertPublicUrl('file:///etc/passwd'), /http/);
   await assert.rejects(assertPublicUrl('not a url'), /link/);
 });
+
+test('recognises YouTube and other video-site links', async () => {
+  const { isVideoSite } = await import('../lib/ingest.js');
+  assert.ok(isVideoSite('https://youtu.be/mIt6kF0gnYw?is=LzEQZcoOKTBQw017'));
+  assert.ok(isVideoSite('https://www.youtube.com/watch?v=mIt6kF0gnYw'));
+  assert.ok(isVideoSite('https://m.youtube.com/shorts/abc'));
+  assert.ok(!isVideoSite('https://swing.vision/matches/abc'));
+  assert.ok(!isVideoSite('https://notyoutube.com/x'));
+});

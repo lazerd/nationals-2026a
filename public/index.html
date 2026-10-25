@@ -19,8 +19,8 @@
       <h1>Make a highlight reel</h1>
       <p class="lede">Paste a SwingVision share link and pick a player. You'll get a vertical reel ready to post on Instagram or Facebook.</p>
       <form id="import-form">
-        <label for="url">SwingVision link</label>
-        <input id="url" name="url" type="url" inputmode="url" placeholder="https://swing.vision/matches/…" autocomplete="off">
+        <label for="url">SwingVision or YouTube link</label>
+        <input id="url" name="url" type="url" inputmode="url" placeholder="https://swing.vision/matches/… or youtu.be/…" autocomplete="off">
         <div class="or"><span>or</span></div>
         <label class="file">
           <input id="video" name="video" type="file" accept="video/*">
@@ -48,10 +48,18 @@
         <input id="player" maxlength="40" placeholder="e.g. Jordan Lee" autocomplete="off">
         <div id="player-chips" class="chips"></div>
 
+        <label>What do you want?</label>
+        <div class="seg" id="mode">
+          <button type="button" data-v="winners" class="on">My winners<small>points I won, doubles OK</small></button>
+          <button type="button" data-v="rallies">Best rallies<small>longest points</small></button>
+        </div>
+
+        <div id="side-wrap" hidden>
         <label>Where are they in the video?</label>
         <div class="seg" id="side">
           <button type="button" data-v="near" class="on">Near side<small>bottom of frame</small></button>
           <button type="button" data-v="far">Far side<small>across the net</small></button>
+        </div>
         </div>
 
         <details>
@@ -81,7 +89,19 @@
           <span class="pill" id="selection-summary"></span>
         </div>
         <p class="muted" id="detect-note"></p>
-        <video id="preview" playsinline controls preload="metadata"></video>
+        <div id="me-panel" class="me-panel" hidden>
+          <p id="me-text"><b>Show us who you are.</b> Pause on a frame where you can be seen, tap <b>This is me</b>, then tap your shirt.</p>
+          <div class="row gap">
+            <button type="button" class="primary small" id="tap-btn">This is me</button>
+            <span class="swatch" id="swatch" hidden></span>
+          </div>
+          <div class="bar" id="me-bar" hidden><div></div></div>
+        </div>
+        <div class="stage">
+          <video id="preview" playsinline controls preload="metadata"></video>
+          <div id="tap-layer" class="tap-layer" hidden><span>Tap your shirt</span></div>
+          <span id="tap-dot" class="tap-dot" hidden></span>
+        </div>
         <div class="row gap">
           <button type="button" class="ghost" id="add-moment">+ Add this moment</button>
           <button type="button" class="ghost" id="auto-pick">Auto-pick best</button>

@@ -75,7 +75,18 @@ summary { cursor: pointer; font-weight: 700; color: var(--muted); }
 .gap { gap: 8px; flex-wrap: wrap; margin: 10px 0; }
 .pill { background: #081833; border: 1px solid var(--line); padding: 4px 10px; border-radius: 999px; font-size: 13px; color: var(--accent); font-weight: 700; }
 
-video#preview { width: 100%; border-radius: 12px; background: #000; max-height: 46vh; }
+video#preview { display: block; width: 100%; border-radius: 12px; background: #000; max-height: 46vh; }
+.stage { position: relative; }
+.tap-layer { position: absolute; inset: 0; cursor: crosshair; border: 2px solid var(--accent); border-radius: 12px; display: flex; align-items: flex-start; justify-content: center; }
+.tap-layer span { margin-top: 10px; background: var(--accent); color: var(--accent-ink); font-weight: 900; font-size: 13px; padding: 4px 10px; border-radius: 999px; }
+.tap-dot { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; border: 3px solid var(--accent); box-shadow: 0 0 0 2px rgba(0,0,0,.6); pointer-events: none; }
+.me-panel { background: #081833; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+.me-panel p { margin: 0 0 4px; font-size: 14px; }
+.primary.small { display: inline-block; width: auto; margin: 0; padding: 10px 16px; font-size: 15px; }
+.swatch { width: 28px; height: 28px; border-radius: 8px; border: 2px solid #fff; }
+.clip .badge.you { background: var(--accent); }
+.clip .badge.maybe { background: #ffd34d; }
+.clip .badge.partner { background: #9fb0d4; }
 .clips { list-style: none; padding: 0; margin: 8px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
 .clip { position: relative; border-radius: 12px; overflow: hidden; background: #081833; border: 2px solid transparent; }
 .clip.on { border-color: var(--accent); }
@@ -86,6 +97,7 @@ video#preview { width: 100%; border-radius: 12px; background: #000; max-height: 
 .clip.on .tick { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .clip .badge { position: absolute; top: 6px; left: 6px; background: var(--accent); color: var(--accent-ink); font-size: 10px; font-weight: 900; padding: 2px 6px; border-radius: 6px; }
 
+body.tapping .sticky { display: none; }
 .sticky { position: sticky; bottom: 0; padding: 8px 0 calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, var(--bg) 35%); }
 
 .bar { height: 10px; background: #081833; border-radius: 999px; overflow: hidden; margin: 14px 0 8px; }
