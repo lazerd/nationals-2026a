@@ -81,3 +81,12 @@ test('mixes in a music track', { timeout: 180000 }, async () => {
   assert.ok(info.duration > 9);
   await fs.rm(dir, { recursive: true });
 });
+
+test('zooms vertically on the player, clamped to the frame', async () => {
+  const { zoomWindow } = await import('../lib/render.js');
+  const src = { width: 1920, height: 1080 };
+  assert.equal(zoomWindow([{ t: 0, x: 0.5 }], src), null);
+  assert.deepEqual(zoomWindow([{ t: 0, x: 0.5, y: 0.4 }], src), { h: 648, y: 108 });
+  assert.equal(zoomWindow([{ t: 0, x: 0.5, y: 0.05 }], src).y, 0);
+  assert.equal(zoomWindow([{ t: 0, x: 0.5, y: 0.98 }], src).y, 1080 - 648);
+});
