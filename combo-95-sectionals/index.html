@@ -118,8 +118,8 @@ textarea.notes{font-family:inherit;font-size:14px;min-height:110px}
 <div class="wrap">
   <header class="top">
     <div>
-      <h1>9.5 Combo · NorCal Sectionals scouting</h1>
-      <p>Johnson Ranch, Sacramento · Fri–Sun, Jan 22–24, 2027 · Rain dates Feb 5–7</p>
+      <h1>South Bay 9.5 Combo · Sectionals scouting</h1>
+      <p>Men's 9.5 Flight 2 · Johnson Ranch Sports Club, 2501 Eureka Rd, Roseville · Jan 22–24, 2027 · Rain dates Feb 5–7</p>
     </div>
     <div class="sync" id="sync">Connecting…</div>
   </header>
@@ -134,10 +134,10 @@ const LINES = ["D1","D2","D3"]; // Combo: three doubles courts
 const LEVEL = 9.5, MAX_GAP = 1.0;
 const STAGES = {regular:"Regular season", playoff:"Local playoffs", sectional:"Past sectionals"};
 const TEAMS = [
-  {id:"us", label:"Our team",      n:"Us"},
-  {id:"eb", label:"EB",            n:"Fri Jan 22 · 8:30am"},
-  {id:"sf", label:"SF",            n:"Fri Jan 22 · 1:30pm"},
-  {id:"sa", label:"SA",            n:"Sat Jan 23 · 10:00am"},
+  {id:"us", label:"South Bay",     n:"Us · SB"},
+  {id:"eb", label:"East Bay",      n:"Fri Jan 22 · 8:30am · EB", wild:true},
+  {id:"sf", label:"San Francisco", n:"Fri Jan 22 · 1:30pm · SF", wild:true},
+  {id:"sa", label:"Sacramento",    n:"Sat Jan 23 · 10:00am · SA"},
 ];
 const OPP = TEAMS.filter(t => t.id !== "us");
 // Our six pairs, from the team's lineup note
@@ -301,7 +301,8 @@ function renderPlan(v){
   v.innerHTML = `
   <section class="panel">
     <h2>Sectionals weekend</h2>
-    <p class="muted small">Round robin at Johnson Ranch. If it rains out, everything moves to Feb 5–7. Tap a team to see who they're likely to play and set our lineup against them.</p>
+    <p class="muted small">Men's 9.5 Flight 2 round robin at Johnson Ranch Sports Club, Roseville (916-888-0250). If weather hits, play moves to Feb 5–7. Tap a team to see who they're likely to play and set our lineup against them.</p>
+    <p class="note">Lineups are due <b>30 minutes before</b> each match, with all players there and ready. Matches run on a followed-by basis, so times after the first round are approximate.</p>
     <div class="sched">${OPP.map(t => {
       const team = state[t.id], has = team.matches.length;
       const {lineup} = has ? project(team) : {lineup:{}};
@@ -330,6 +331,7 @@ function renderProjection(v, team){
   v.innerHTML = `
   <section class="panel">
     <h2>${esc(teamLabel(current))}: most likely lineup</h2>
+    ${wildNote()}
     <p class="muted small">Built from ${team.matches.length} matches (${counts}). Players marked out for Sectionals are excluded. The bar shows how often this exact pair played that court, weighted by stage.</p>
     <div class="lineup">${LINES.map(l => {
       const s = lineup[l];
@@ -501,6 +503,7 @@ function renderImport(v, team){
   v.innerHTML = `
   <section class="panel">
     <h2>Team details</h2>
+    ${current!=="us" ? wildNote() : ""}
     <div class="row"><label>TennisLink team name <input type="text" id="tname" value="${esc(team.teamName)}" placeholder="e.g. Club name 18 9.5 Combo"></label></div>
   </section>
 
@@ -579,6 +582,10 @@ ${raw.slice(0, 12000)}`, {modelTier:"default"});
   };
 }
 
+function wildNote(){
+  const t = TEAMS.find(x=>x.id===current);
+  return t.wild ? `<p class="note">${esc(t.label)} has <b>two</b> 9.5 teams at Sectionals: one in Flight 1, one (a wildcard) in our Flight 2. Make sure scorecards are for the team in Flight 2, and put its TennisLink name below.</p>` : "";
+}
 function emptyState(team){
   return `<section class="panel empty"><h2>No match history for ${esc(teamLabel(current))} yet</h2>
     <p>Add their season and local-playoff scorecards and the projected lineup appears here.</p>
