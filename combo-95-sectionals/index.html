@@ -115,7 +115,7 @@ textarea.notes{font-family:inherit;font-size:14px;min-height:110px}
 </style>
 </head>
 <style>
-.draw{grid-template-columns:repeat(7,minmax(0,1fr))}
+.draw{grid-template-columns:repeat(5,minmax(0,1fr))}
 @media (max-width:900px){.draw{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media (max-width:560px){.draw{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .draw button .t{font-size:19px}
@@ -152,15 +152,16 @@ const TEAMS = [
   {id:"merv",    label:"Mervyn Morris", n:"EB · Fri 8:30am", slot:"eb"},
   {id:"bcsf",    label:"Bay Club SF",   n:"SF · Fri 1:30pm", slot:"sf"},
   {id:"goldman", label:"Goldman TC",    n:"SF · Fri 1:30pm", slot:"sf"},
-  {id:"sierra",  label:"Sierra View",   n:"SA · Sat 10:00am", slot:"sa"},
-  {id:"goldriv", label:"Gold River",    n:"SA · long shot", slot:"sa"},
+  {id:"sierra",  label:"Sierra View",   n:"SA · Sat 10:00am", slot:"sa", pending:true},
+  {id:"goldriv", label:"Gold River",    n:"SA · Sat 10:00am", slot:"sa", pending:true},
 ];
 const SLOTS = [
   {id:"eb", label:"East Bay", when:"Fri Jan 22 · 8:30am", why:"Washington Pk (1st, 8–2) and Mervyn Morris (2nd, 7–3) both go to Sectionals — EB has a wildcard. One is in our flight, the other in Flight 1; NorCal places them at random after the playoffs. Scout both."},
   {id:"sf", label:"San Francisco", when:"Fri Jan 22 · 1:30pm", why:"Bay Club SF (1st, 8–2) and Goldman (2nd, 6–4) are both already marked “Sectional” — SF has a wildcard. One of them is in our flight. Scout both."},
-  {id:"sa", label:"Sacramento", when:"Sat Jan 23 · 10:00am", why:"Only two SA teams, and no wildcard. Sierra View (7–3) beat Gold River in 7 of their 9 meetings; their playoff hasn't been posted yet. Expect Sierra View."},
+  {id:"sa", label:"Sacramento", when:"Sat Jan 23 · 10:00am", why:"Only two SA teams and no wildcard, so the playoff decides it: Sierra View (7–3) vs Gold River (3–7). Not played yet — this slot stays blank until there's a winner.", pending:true},
 ];
-const OPP = TEAMS.filter(t => t.id !== "us");
+const OPP = TEAMS.filter(t => t.id !== "us" && !t.pending);
+const SHOWN = TEAMS.filter(t => !t.pending);
 
 const slug = s => String(s).toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
 const newPlayer = name => ({id:slug(name), name:name.trim(), ntrp:null, tr:null, out:false, note:""});
@@ -330,7 +331,7 @@ function strongestHtml(team){
 /* ---------- render ---------- */
 function render(){
   const draw = document.getElementById("draw");
-  draw.innerHTML = TEAMS.map(t => `<button data-team="${t.id}" aria-current="${t.id===current}"><span class="n">${esc(t.n)}</span><span class="t">${esc(t.label)}</span></button>`).join("");
+  draw.innerHTML = SHOWN.map(t => `<button data-team="${t.id}" aria-current="${t.id===current}"><span class="n">${esc(t.n)}</span><span class="t">${esc(t.label)}</span></button>`).join("");
   draw.querySelectorAll("button").forEach(b => b.onclick = () => { current = b.dataset.team; draft = null; render(); });
 
   const tabs = current === "us"
@@ -360,6 +361,7 @@ function renderPlan(v){
     ${SLOTS.map(sl => `<div class="slotbox">
       <div class="sh"><b>vs ${esc(sl.label)}</b><span class="muted small">${esc(sl.when)}</span></div>
       <div class="small muted">${esc(sl.why)}</div>
+      ${sl.pending ? `<div class="cand"><div><b>TBD</b> <span class="small muted">Waiting on the area playoff</span></div></div>` : ""}
       ${OPP.filter(t => t.slot === sl.id).map(t => {
         const team = state[t.id], has = team.matches.length;
         const {lineup} = has ? project(team) : {lineup:{}};
