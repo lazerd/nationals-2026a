@@ -114,12 +114,25 @@ textarea.notes{font-family:inherit;font-size:14px;min-height:110px}
 @media (prefers-reduced-motion:no-preference){.conf i{transition:width .4s ease}}
 </style>
 </head>
-<body>
+<style>
+.draw{grid-template-columns:repeat(7,minmax(0,1fr))}
+@media (max-width:900px){.draw{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (max-width:560px){.draw{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.draw button .t{font-size:19px}
+.slotbox{border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:10px}
+.slotbox .sh{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}
+.slotbox .sh b{font-family:"Barlow Condensed",sans-serif;font-size:22px}
+.cand{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:8px 10px;background:var(--bg);border-radius:6px;margin-top:6px}
+.lineq{font-size:13px;color:var(--muted)}
+.lineq b{color:var(--ink);font-weight:600}
+.vsl{font-size:12px;color:var(--muted)}
+</style>
 <div class="wrap">
   <header class="top">
     <div>
-      <h1>South Bay 9.5 Combo · Sectionals scouting</h1>
-      <p>Men's 9.5 Flight 2 · Johnson Ranch Sports Club, 2501 Eureka Rd, Roseville · Jan 22–24, 2027 · Rain dates Feb 5–7</p>
+      <h1>Sunnyvale 9.5 Combo · Sectionals scouting</h1>
+      <p>Men's 9.5 Flight 2 · Johnson Ranch Sports Club, Roseville · Jan 22–24, 2027 · Rain dates Feb 5–7</p>
+      <p class="small muted" style="margin:2px 0 0">Data: NorCal league scorecards + TennisRecord ratings, pulled Nov 22, 2026</p>
     </div>
     <div class="sync" id="sync">Connecting…</div>
   </header>
@@ -134,33 +147,32 @@ const LINES = ["D1","D2","D3"]; // Combo: three doubles courts
 const LEVEL = 9.5, MAX_GAP = 1.0;
 const STAGES = {regular:"Regular season", playoff:"Local playoffs", sectional:"Past sectionals"};
 const TEAMS = [
-  {id:"us", label:"South Bay",     n:"Us · SB"},
-  {id:"eb", label:"East Bay",      n:"Fri Jan 22 · 8:30am · EB", wild:true},
-  {id:"sf", label:"San Francisco", n:"Fri Jan 22 · 1:30pm · SF", wild:true},
-  {id:"sa", label:"Sacramento",    n:"Sat Jan 23 · 10:00am · SA"},
+  {id:"us",      label:"Sunnyvale MTC", n:"Us · South Bay"},
+  {id:"wash",    label:"Washington Pk", n:"EB · Fri 8:30am", slot:"eb"},
+  {id:"merv",    label:"Mervyn Morris", n:"EB · Fri 8:30am", slot:"eb"},
+  {id:"bcsf",    label:"Bay Club SF",   n:"SF · Fri 1:30pm", slot:"sf"},
+  {id:"goldman", label:"Goldman TC",    n:"SF · Fri 1:30pm", slot:"sf"},
+  {id:"sierra",  label:"Sierra View",   n:"SA · Sat 10:00am", slot:"sa"},
+  {id:"goldriv", label:"Gold River",    n:"SA · long shot", slot:"sa"},
+];
+const SLOTS = [
+  {id:"eb", label:"East Bay", when:"Fri Jan 22 · 8:30am", why:"Washington Pk (1st, 8–2) and Mervyn Morris (2nd, 7–3) both go to Sectionals — EB has a wildcard. One is in our flight, the other in Flight 1; NorCal places them at random after the playoffs. Scout both."},
+  {id:"sf", label:"San Francisco", when:"Fri Jan 22 · 1:30pm", why:"Bay Club SF (1st, 8–2) and Goldman (2nd, 6–4) are both already marked “Sectional” — SF has a wildcard. One of them is in our flight. Scout both."},
+  {id:"sa", label:"Sacramento", when:"Sat Jan 23 · 10:00am", why:"Only two SA teams, and no wildcard. Sierra View (7–3) beat Gold River in 7 of their 9 meetings; their playoff hasn't been posted yet. Expect Sierra View."},
 ];
 const OPP = TEAMS.filter(t => t.id !== "us");
-// Our six pairs, from the team's lineup note
-const OUR_PAIRS = [["Micheal","Bill"],["Darrin","Alex"],["Ashwin","Hanson"],["Cody","Jerry"],["Ken","Sanggyum"],["Ryan","Ben"]];
 
 const slug = s => String(s).toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
-const newPlayer = name => ({id:slug(name), name:name.trim(), ntrp:null, wtnD:null, utrD:null, out:false, note:""});
-function blankTeam(t){
-  const b = {name:t.label, teamName:"", players:[], matches:[], plan:{}, notes:"", knownPairs:[], weights:{regular:1,playoff:2,sectional:2}};
-  if (t.id === "us"){
-    b.players = OUR_PAIRS.flat().map(newPlayer);
-    b.knownPairs = OUR_PAIRS.map(p => p.map(slug));
-  }
-  return b;
-}
+const newPlayer = name => ({id:slug(name), name:name.trim(), ntrp:null, tr:null, out:false, note:""});
+const blankTeam = t => ({name:t.label, teamName:"", summary:"", players:[], matches:[], plan:{}, notes:"", knownPairs:[], weights:{regular:1,playoff:2,sectional:2,recent:1.5}});
 
 let db = null, sample = null;
 const state = {}; TEAMS.forEach(t => state[t.id] = blankTeam(t));
-let current = "eb", tab = "projection", sortKey = "app", sortDir = -1, draft = null;
+let current = "us", tab = "plan", sortKey = "tr", sortDir = -1, draft = null;
 
 /* ---------- storage ---------- */
-function lsGet(id){ try{ const v = localStorage.getItem("combo95:"+id); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
-function lsSet(id,v){ try{ localStorage.setItem("combo95:"+id, JSON.stringify(v)); }catch(e){} }
+function lsGet(id){ try{ const v = localStorage.getItem("combo95v2:"+id); return v ? JSON.parse(v) : null; }catch(e){ return null; } }
+function lsSet(id,v){ try{ localStorage.setItem("combo95v2:"+id, JSON.stringify(v)); }catch(e){} }
 TEAMS.forEach(t => { const v = lsGet(t.id); if (v) state[t.id] = Object.assign(blankTeam(t), v); });
 
 async function save(id){
@@ -168,14 +180,14 @@ async function save(id){
   lsSet(id, doc);
   if (!db) return;
   try { await db.doc("teams/"+id).set(doc); setSync("Saved · shared with your team"); }
-  catch(e){ setSync(e.code === "invalid_argument" ? "You can view but not edit this page" : "Couldn't save — changes kept on this device"); }
+  catch(e){ setSync(e.code === "invalid_argument" || e.code === "permission_denied" ? "You can view but not edit this page" : "Couldn't save — changes kept on this device"); }
 }
 function setSync(t){ document.getElementById("sync").textContent = t; }
 
 (async () => {
   try { db = await window.claude?.use("db"); } catch(e){ db = null; }
   try { sample = await window.claude?.use("sample"); } catch(e){ sample = null; }
-  if (!db){ setSync("Saving on this device only"); render(); return; }
+  if (!db){ setSync("Offline copy — sign in to see the shared scouting data"); render(); return; }
   setSync("Live · shared with your team");
   TEAMS.forEach(t => {
     db.doc("teams/"+t.id).onSnapshot(snap => {
@@ -200,7 +212,8 @@ function ensurePlayer(team, name){
   return id;
 }
 function avg(a){ const v = a.filter(x => x != null); return v.length ? v.reduce((s,x)=>s+x,0)/v.length : null; }
-function teamLabel(id){ const t = state[id]; return t.teamName ? `${TEAMS.find(x=>x.id===id).label} · ${t.teamName}` : TEAMS.find(x=>x.id===id).label; }
+const teamMeta = id => TEAMS.find(x=>x.id===id);
+const teamLabel = id => teamMeta(id).label;
 
 /* Combo legality: combined NTRP ≤ 9.5 and partners within 1.0 of each other */
 function combo(team, ids){
@@ -209,7 +222,18 @@ function combo(team, ids){
   const sum = r[0]+r[1], gap = Math.abs(r[0]-r[1]);
   if (sum > LEVEL + 1e-9) return {sum, txt:`NTRP ${sum.toFixed(1)} · over 9.5`, cls:"bad-t", bad:true};
   if (gap > MAX_GAP + 1e-9) return {sum, txt:`NTRP ${r[0].toFixed(1)}+${r[1].toFixed(1)} · gap over 1.0`, cls:"bad-t", bad:true};
-  return {sum, txt:`NTRP ${r[0].toFixed(1)}+${r[1].toFixed(1)} = ${sum.toFixed(1)}`, cls: sum < LEVEL ? "warn-t" : ""};
+  return {sum, txt:`${r[0].toFixed(1)}+${r[1].toFixed(1)}`, cls: sum < LEVEL ? "warn-t" : ""};
+}
+/* TennisRecord estimated dynamic rating: higher is stronger, comparable across areas */
+function pairRating(team, ids){
+  const ps = ids.map(i => playerById(team,i)).filter(Boolean);
+  return { tr: ps.length===2 && ps.every(p=>p.tr!=null) ? (ps[0].tr+ps[1].tr)/2 : null };
+}
+const trTxt = r => `TR ${r.tr==null ? "—" : r.tr.toFixed(2)}`;
+function edgeHtml(oR, tR){
+  if (oR.tr == null || tR.tr == null) return `<div class="edge even">—</div>`;
+  const d = oR.tr - tR.tr;
+  return `<div class="edge ${Math.abs(d)<0.05?"even":d>0?"us":"them"}" title="Average TennisRecord rating, us minus them">${d>0?"+":""}${d.toFixed(2)}</div>`;
 }
 
 /* ---------- the model ---------- */
@@ -217,9 +241,10 @@ function analyze(team){
   const w = team.weights, stats = {}, pairs = {}, lineTotals = {};
   LINES.forEach(l => lineTotals[l] = 0);
   let totalW = 0;
+  const recent = new Set([...team.matches].sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,4).map(m=>m.id));
   team.players.forEach(p => stats[p.id] = {w:0, lines:Object.fromEntries(LINES.map(l=>[l,0])), won:0, lost:0, matches:0});
   team.matches.forEach(m => {
-    const mw = w[m.stage] ?? 1; totalW += mw;
+    const mw = (w[m.stage] ?? 1) * (recent.has(m.id) ? (w.recent ?? 1) : 1); totalW += mw;
     m.lines.forEach(ln => {
       if (!ln.players?.length || !LINES.includes(ln.line)) return;
       lineTotals[ln.line] += mw;
@@ -253,7 +278,6 @@ function project(team){
     out[c.line] = {ids:c.ids, w:c.w, kind:"pair"};
     c.ids.forEach(i => used.add(i));
   }
-  // a line still open: next-best intact partnership from any line, then build from individuals
   for (const l of LINES) if (!out[l]){
     const p = Object.values(A.pairs).filter(p => p.ids.every(avail) && !p.ids.some(i=>used.has(i))).sort((a,b)=>b.w-a.w)[0];
     if (p){ out[l] = {ids:p.ids, w:p.lines[l]||0, kind:"moved"}; p.ids.forEach(i=>used.add(i)); continue; }
@@ -266,24 +290,51 @@ function project(team){
     if (!out[l]) return;
     const key = [...out[l].ids].sort().join("|");
     out[l].alts = Object.entries(A.pairs).filter(([k,p]) => k !== key && p.lines[l] && p.ids.every(avail))
-      .sort((a,b)=>b[1].lines[l]-a[1].lines[l]).slice(0,2).map(([,p]) => pairName(team,p.ids));
+      .sort((a,b)=>b[1].lines[l]-a[1].lines[l]).slice(0,2).map(([,p]) => p.ids);
+    const pr = A.pairs[key]; out[l].rec = pr ? `${pr.won}–${pr.lost} together` : "";
   });
   return {lineup: out, A};
 }
 
-function pairRating(team, ids){
-  const ps = ids.map(i => playerById(team,i)).filter(Boolean);
-  return { wtn: avg(ps.map(p => p.wtnD)), utr: avg(ps.map(p => p.utrD)) };
+/* Strongest legal lineup: top-rated, combo-legal, eligible (2+ matches) players; pairs that have played together get a small bump */
+function strongest(team){
+  const A = analyze(team);
+  const elig = team.players.filter(p => !p.out && p.tr != null && p.ntrp != null && (A.stats[p.id]?.matches || 0) >= 2);
+  const pairs = [];
+  for (let i=0;i<elig.length;i++) for (let j=i+1;j<elig.length;j++){
+    const a = elig[i], b = elig[j];
+    if (a.ntrp + b.ntrp > LEVEL + 1e-9 || Math.abs(a.ntrp-b.ntrp) > MAX_GAP + 1e-9) continue;
+    const k = [a.id,b.id].sort().join("|"), together = !!A.pairs[k];
+    pairs.push({ids:[a.id,b.id], tr:(a.tr+b.tr)/2, score:(a.tr+b.tr)/2 + (together?0.03:0), together});
+  }
+  pairs.sort((x,y)=>y.score-x.score);
+  const top = pairs.slice(0,45); let best = null;
+  for (let i=0;i<top.length;i++) for (let j=i+1;j<top.length;j++){
+    if (top[j].ids.some(x=>top[i].ids.includes(x))) continue;
+    for (let k=j+1;k<top.length;k++){
+      if (top[k].ids.some(x=>top[i].ids.includes(x)||top[j].ids.includes(x))) continue;
+      const sc = top[i].score+top[j].score+top[k].score;
+      if (!best || sc > best.sc) best = {sc, set:[top[i],top[j],top[k]]};
+    }
+  }
+  return best ? best.set.sort((x,y)=>y.tr-x.tr) : [];
+}
+function strongestHtml(team){
+  const st = strongest(team);
+  if (!st.length) return "";
+  return `<div class="lineup">${st.map((p,i) => `<div class="slot"><div class="ln">${LINES[i]}</div>
+    <div><div class="who">${pairName(team,p.ids)}${p.together ? "" : `<span class="alt">Haven't played together this season</span>`}</div>
+    <div class="rt">${combo(team,p.ids).txt} · TR ${p.tr.toFixed(2)}</div></div><div></div></div>`).join("")}</div>`;
 }
 
 /* ---------- render ---------- */
 function render(){
   const draw = document.getElementById("draw");
-  draw.innerHTML = TEAMS.map(t => `<button data-team="${t.id}" aria-current="${t.id===current}"><span class="n">${esc(t.n)}</span><span class="t">${esc(t.id==="us" ? (state.us.teamName||t.label) : t.label)}</span></button>`).join("");
+  draw.innerHTML = TEAMS.map(t => `<button data-team="${t.id}" aria-current="${t.id===current}"><span class="n">${esc(t.n)}</span><span class="t">${esc(t.label)}</span></button>`).join("");
   draw.querySelectorAll("button").forEach(b => b.onclick = () => { current = b.dataset.team; draft = null; render(); });
 
   const tabs = current === "us"
-    ? [["plan","Game plan"],["roster","Our roster & pairs"],["matches","Our matches"],["import","Add data"]]
+    ? [["plan","Weekend plan"],["roster","Our roster & pairs"],["matches","Our matches"],["import","Add data"]]
     : [["projection","Projected lineup"],["matchup","Matchup"],["roster","Roster & pairs"],["matches","Match history"],["import","Add data"]];
   if (!tabs.some(t => t[0]===tab)) tab = tabs[0][0];
   const tb = document.getElementById("tabs");
@@ -295,30 +346,35 @@ function render(){
   ({plan:renderPlan, projection:renderProjection, matchup:renderMatchup, roster:renderRoster, matches:renderMatches, import:renderImport})[tab](v, team);
 }
 
-/* Our home view: the weekend at a glance */
+function lineupLine(team, lineup){
+  return LINES.map(l => lineup[l] ? `${l} <b>${pairName(team, lineup[l].ids)}</b>` : `${l} ?`).join(" · ");
+}
+
 function renderPlan(v){
   const us = state.us;
   v.innerHTML = `
   <section class="panel">
     <h2>Sectionals weekend</h2>
-    <p class="muted small">Men's 9.5 Flight 2 round robin at Johnson Ranch Sports Club, Roseville (916-888-0250). If weather hits, play moves to Feb 5–7. Tap a team to see who they're likely to play and set our lineup against them.</p>
+    <p class="muted small">Men's 9.5 Flight 2 round robin at Johnson Ranch Sports Club, 2501 Eureka Rd, Roseville (916-888-0250). If weather hits, play moves to Feb 5–7.</p>
     <p class="note">Lineups are due <b>30 minutes before</b> each match, with all players there and ready. Matches run on a followed-by basis, so times after the first round are approximate.</p>
-    <div class="sched">${OPP.map(t => {
-      const team = state[t.id], has = team.matches.length;
-      const {lineup} = has ? project(team) : {lineup:{}};
-      const plan = us.plan[t.id] || {};
-      const set = LINES.filter(l => (plan[l]||[]).filter(Boolean).length === 2).length;
-      return `<div class="it"><div class="when">${esc(t.n)}</div>
-        <div><b>vs ${esc(teamLabel(t.id))}</b>
-          <div class="small muted">${has ? LINES.map(l => lineup[l] ? `${l}: ${pairName(team, lineup[l].ids)}` : `${l}: ?`).join(" · ") : "No scouting data yet"}</div>
-          <div class="small muted">Our lineup: ${set}/3 lines set</div></div>
-        <button class="btn ghost go" data-t="${t.id}">Open</button></div>`;
-    }).join("")}</div>
+    ${SLOTS.map(sl => `<div class="slotbox">
+      <div class="sh"><b>vs ${esc(sl.label)}</b><span class="muted small">${esc(sl.when)}</span></div>
+      <div class="small muted">${esc(sl.why)}</div>
+      ${OPP.filter(t => t.slot === sl.id).map(t => {
+        const team = state[t.id], has = team.matches.length;
+        const {lineup} = has ? project(team) : {lineup:{}};
+        const set = LINES.filter(l => ((us.plan[t.id]||{})[l]||[]).filter(Boolean).length === 2).length;
+        return `<div class="cand"><div><b>${esc(t.label)}</b> <span class="small muted">${esc(team.summary||"")}</span>
+          <div class="lineq">${has ? "Likely: " + lineupLine(team, lineup) : "No scouting data yet"}</div>
+          ${has ? `<div class="lineq">Best-case: ${strongest(team).map((p,i)=>`${LINES[i]} <b>${pairName(team,p.ids)}</b>`).join(" · ")}</div>` : ""}
+          <div class="small muted">Our lineup vs them: ${set}/3 courts set</div></div>
+          <button class="btn ghost go" data-t="${t.id}">Open</button></div>`;
+      }).join("")}
+    </div>`).join("")}
   </section>
   <section class="panel">
     <h3>Team notes</h3>
-    <p class="muted small">Logistics, who's available which day, warm-up courts, anything the team should see.</p>
-    <textarea class="notes" id="tnotes" placeholder="e.g. Ken out Saturday morning. Warm-up at 7:45 Friday.">${esc(us.notes)}</textarea>
+    <textarea class="notes" id="tnotes" placeholder="Availability by day, warm-up plans, anything the team should see.">${esc(us.notes)}</textarea>
   </section>`;
   v.querySelectorAll(".go").forEach(b => b.onclick = () => { current = b.dataset.t; tab = state[current].matches.length ? "matchup" : "import"; render(); });
   v.querySelector("#tnotes").onchange = e => { us.notes = e.target.value; save("us"); };
@@ -327,12 +383,12 @@ function renderPlan(v){
 function renderProjection(v, team){
   if (!team.matches.length){ v.innerHTML = emptyState(team); bindEmpty(v); return; }
   const {lineup} = project(team);
-  const counts = Object.keys(STAGES).map(s => `${team.matches.filter(m=>m.stage===s).length} ${STAGES[s].toLowerCase()}`).join(", ");
+  const counts = Object.keys(STAGES).map(s => [s, team.matches.filter(m=>m.stage===s).length]).filter(x=>x[1]).map(([s,n]) => `${n} ${STAGES[s].toLowerCase()}`).join(", ");
   v.innerHTML = `
   <section class="panel">
     <h2>${esc(teamLabel(current))}: most likely lineup</h2>
-    ${wildNote()}
-    <p class="muted small">Built from ${team.matches.length} matches (${counts}). Players marked out for Sectionals are excluded. The bar shows how often this exact pair played that court, weighted by stage.</p>
+    <p class="muted small">${esc(team.teamName)}${team.summary ? " · " + esc(team.summary) : ""}</p>
+    <p class="muted small">Built from ${team.matches.length} matches (${counts}); their last 4 matches count ${team.weights.recent ?? 1}×. Players marked out are excluded. The bar shows how often this exact pair played that court.</p>
     <div class="lineup">${LINES.map(l => {
       const s = lineup[l];
       if (!s) return `<div class="slot"><div class="ln">${l}</div><div class="who muted">Not enough history</div><div></div></div>`;
@@ -340,23 +396,27 @@ function renderProjection(v, team){
       return `<div class="slot">
         <div class="ln">${l}</div>
         <div><div class="who">${pairName(team, s.ids)}
-          ${s.alts?.length ? `<span class="alt">Also seen here: ${s.alts.join("; ")}</span>` : ""}
+          ${s.alts?.length ? `<span class="alt">Also seen here: ${s.alts.map(a=>pairName(team,a)).join("; ")}</span>` : ""}
           ${s.kind==="moved" ? `<span class="alt">This pair usually plays a different court</span>` : ""}
           ${s.kind==="built" ? `<span class="alt">Pairing inferred — these two haven't played together</span>` : ""}</div>
-          <div class="rt"><span class="${c.cls}">${c.txt}</span> · WTN ${fmt(r.wtn)} · UTR ${fmt(r.utr,2)}</div></div>
+          <div class="rt"><span class="${c.cls}">${c.txt}</span> · ${trTxt(r)}${s.rec ? " · " + s.rec : ""}</div></div>
         <div class="cf"><div class="conf"><i style="width:${pct}%"></i></div><div class="conf-l">${pct}% of weighted matches</div></div>
       </div>`; }).join("")}</div>
   </section>
   <section class="panel">
-    <h3>Scouting notes on ${esc(teamLabel(current))}</h3>
-    <textarea class="notes" id="onotes" placeholder="Lefties, who lobs, who poaches, who's coming back from injury…">${esc(team.notes)}</textarea>
+    <h3>If they stack their best: strongest legal lineup</h3>
+    <p class="muted small">Their three highest-rated pairs that are Combo-legal, using only players eligible for post-season (2+ matches) who aren't marked out. Captains often stack at Sectionals, so plan for this too.</p>
+    ${strongestHtml(team)}
   </section>
   <section class="panel">
-    <h3>How much each stage counts</h3>
-    <p class="muted small">Local playoff lineups are the best preview of how a captain stacks at Sectionals, so they count double by default.</p>
-    <div class="weights">${Object.entries(STAGES).map(([k,l]) => `
-      <div><label for="w-${k}">${l}: <b id="wv-${k}">${team.weights[k]}×</b></label>
-      <input type="range" id="w-${k}" min="0" max="5" step="0.5" value="${team.weights[k]}" data-k="${k}"></div>`).join("")}</div>
+    <h3>Scouting notes</h3>
+    <textarea class="notes" id="onotes" placeholder="Lefties, who lobs, who poaches…">${esc(team.notes)}</textarea>
+  </section>
+  <section class="panel">
+    <h3>How much each match counts</h3>
+    <div class="weights">${[["regular","Regular season"],["playoff","Local playoffs"],["recent","Boost for their last 4 matches"]].map(([k,l]) => `
+      <div><label for="w-${k}">${l}: <b id="wv-${k}">${team.weights[k] ?? 1}×</b></label>
+      <input type="range" id="w-${k}" min="${k==="recent"?1:0}" max="5" step="0.5" value="${team.weights[k] ?? 1}" data-k="${k}"></div>`).join("")}</div>
   </section>`;
   v.querySelector("#onotes").onchange = e => { team.notes = e.target.value; save(current); };
   v.querySelectorAll("input[type=range]").forEach(r => {
@@ -377,36 +437,33 @@ function renderMatchup(v, team){
   const us = state.us;
   if (!team.matches.length){ v.innerHTML = emptyState(team); bindEmpty(v); return; }
   const {lineup} = project(team);
+  const strong = strongest(team);
   const plan = us.plan[current] ||= {};
   const avail = us.players.filter(p => !p.out);
   const pairs = ourPairs();
-  const opts = sel => `<option value="">—</option>` + avail.map(p => `<option value="${p.id}" ${p.id===sel?"selected":""}>${esc(p.name)}</option>`).join("");
+  const opts = sel => `<option value="">—</option>` + avail.map(p => `<option value="${p.id}" ${p.id===sel?"selected":""}>${esc(p.name)}${p.ntrp?` (${p.ntrp.toFixed(1)})`:""}</option>`).join("");
   const usedCount = {}; LINES.forEach(l => (plan[l]||[]).filter(Boolean).forEach(i => usedCount[i] = (usedCount[i]||0)+1));
   const dupes = Object.keys(usedCount).filter(i => usedCount[i] > 1);
   v.innerHTML = `
   <section class="panel">
     <h2>Us vs ${esc(teamLabel(current))}</h2>
-    <p class="muted small">${esc(TEAMS.find(t=>t.id===current).n)}. Pick a pair for each court on the left — choose one of our pairs from the first menu, or set the two players yourself. The middle column compares doubles WTN (lower is stronger): green favors us, red favors them, within ~1.0 is even.</p>
+    <p class="muted small">${esc(teamMeta(current).n)}. Pick a pair per court — one of our pairs from the first menu, or the two players yourself. The middle column is our pair's average TennisRecord rating minus theirs: green favors us, red favors them, within 0.05 is even.</p>
     ${dupes.length ? `<p class="note bad-t">${dupes.map(i=>esc(nameOf(us,i))).join(", ")} ${dupes.length>1?"are":"is"} on more than one court.</p>` : ""}
     ${LINES.map(l => {
       const ours = plan[l] || [], theirs = lineup[l];
       const oIds = ours.filter(Boolean);
-      const oR = pairRating(us, oIds), tR = theirs ? pairRating(team, theirs.ids) : {};
+      const oR = pairRating(us, oIds), tR = theirs ? pairRating(team, theirs.ids) : {tr:null};
       const oC = combo(us, oIds), tC = theirs ? combo(team, theirs.ids) : null;
-      let edge = `<div class="edge even">—</div>`;
-      if (oR.wtn != null && tR.wtn != null){
-        const d = tR.wtn - oR.wtn;
-        edge = `<div class="edge ${Math.abs(d)<1?"even":d>0?"us":"them"}">${d>0?"+":""}${d.toFixed(1)}</div>`;
-      }
       const curKey = [...oIds].sort().join("|");
-      const quick = `<select class="quick" data-l="${l}" aria-label="${l} pair"><option value="">Pick a pair…</option>${pairs.map(p => { const k=[...p].sort().join("|"); return `<option value="${p.join("|")}" ${k===curKey?"selected":""}>${pairName(us,p)}</option>`; }).join("")}</select>`;
+      const quick = `<select class="quick" data-l="${l}" aria-label="${l} pair"><option value="">Pick a pair…</option>${pairs.map(p => { const k=[...p].sort().join("|"), r=pairRating(us,p); return `<option value="${p.join("|")}" ${k===curKey?"selected":""}>${pairName(us,p)}${r.tr!=null?` · ${r.tr.toFixed(2)}`:""}</option>`; }).join("")}</select>`;
       return `<div class="vs"><div class="ln">${l}</div>
         <div>${quick}<div class="row" style="margin-top:6px"><select data-l="${l}" data-i="0" aria-label="${l} player 1">${opts(ours[0])}</select><select data-l="${l}" data-i="1" aria-label="${l} player 2">${opts(ours[1])}</select></div>
-          <div class="small muted"><span class="${oC.cls}">${oC.txt}</span> · WTN ${fmt(oR.wtn)} · UTR ${fmt(oR.utr,2)}</div></div>
-        ${edge}
+          <div class="small muted"><span class="${oC.cls}">${oC.txt}</span> · ${trTxt(oR)}</div></div>
+        ${edgeHtml(oR, tR)}
         <div class="theirs"><b>${theirs ? pairName(team, theirs.ids) : "—"}</b>
-          <div class="small muted">${tC ? `<span class="${tC.cls}">${tC.txt}</span> · ` : ""}WTN ${fmt(tR.wtn)} · UTR ${fmt(tR.utr,2)}</div>
-          ${theirs?.alts?.length ? `<div class="small muted">Or: ${theirs.alts.join("; ")}</div>` : ""}</div></div>`;
+          <div class="small muted">${tC ? `<span class="${tC.cls}">${tC.txt}</span> · ` : ""}${trTxt(tR)}${theirs?.rec ? " · " + theirs.rec : ""}</div>
+          ${theirs?.alts?.length ? `<div class="small muted">Or: ${theirs.alts.map(a => `${pairName(team,a)} (${fmt(pairRating(team,a).tr,2)})`).join("; ")}</div>` : ""}
+          ${strong[LINES.indexOf(l)] ? `<div class="small muted">If stacked: ${pairName(team,strong[LINES.indexOf(l)].ids)} (${strong[LINES.indexOf(l)].tr.toFixed(2)})</div>` : ""}</div></div>`;
     }).join("")}
   </section>`;
   v.querySelectorAll("select.quick").forEach(s => s.onchange = () => { if (!s.value) return; plan[s.dataset.l] = s.value.split("|"); save("us"); render(); });
@@ -422,7 +479,7 @@ function renderRoster(v, team){
     const s = A.stats[p.id] || {w:0,lines:{},won:0,lost:0,matches:0};
     return {p, s, app: A.totalW ? s.w/A.totalW : 0};
   });
-  const key = {app:r=>r.app, name:r=>r.p.name.toLowerCase(), ntrp:r=>r.p.ntrp ?? 0, wtnD:r=>r.p.wtnD ?? 99, utrD:r=>r.p.utrD ?? 0, rec:r=>r.s.won-r.s.lost};
+  const key = {app:r=>r.app, name:r=>r.p.name.toLowerCase(), ntrp:r=>r.p.ntrp ?? 0, tr:r=>r.p.tr ?? 0, rec:r=>r.s.won-r.s.lost};
   rows.sort((a,b) => { const x=key[sortKey](a), y=key[sortKey](b); return (x>y?1:x<y?-1:0)*sortDir; });
   const th = (k,l,c="") => `<th class="${c}" data-k="${k}">${l}${sortKey===k?(sortDir>0?" ▲":" ▼"):""}</th>`;
   const pairList = Object.values(A.pairs).sort((a,b)=>b.w-a.w);
@@ -430,35 +487,35 @@ function renderRoster(v, team){
   v.innerHTML = `
   <section class="panel">
     <h2>${esc(teamLabel(current))} roster</h2>
-    <p class="muted small">Edit ratings right in the table. NTRP drives the Combo check (pair must add to 9.5 or less, partners within 1.0). Uncheck “At Sectionals” for anyone who isn't making it — ${isUs ? "they drop out of the pair menus" : "the projection reshuffles without them"}.</p>
+    <p class="muted small">TR is the TennisRecord estimated dynamic rating (higher is stronger). NTRP drives the Combo check: a pair must add to 9.5 or less, with partners within 1.0. Uncheck “Available” for anyone who can't play Sectionals for this team.</p>
     ${team.players.length ? `<div class="tbl"><table>
-      <thead><tr><th>At Sectionals</th>${th("name","Player")}${th("app","Played","num")}${LINES.map(l=>`<th class="num">${l}</th>`).join("")}${th("rec","W–L","num")}${th("ntrp","NTRP","num")}${th("wtnD","WTN D","num")}${th("utrD","UTR D","num")}<th>Notes</th><th></th></tr></thead>
+      <thead><tr><th>Available</th>${th("name","Player")}${th("app","Played","num")}${LINES.map(l=>`<th class="num">${l}</th>`).join("")}${th("rec","W–L","num")}${th("ntrp","NTRP","num")}${th("tr","TR","num")}<th>Notes</th><th></th></tr></thead>
       <tbody>${rows.map(({p,s,app}) => `<tr class="${p.out?"out":""}">
-        <td><input type="checkbox" data-id="${p.id}" class="inout" ${p.out?"":"checked"} aria-label="${esc(p.name)} at Sectionals"></td>
+        <td><input type="checkbox" data-id="${p.id}" class="inout" ${p.out?"":"checked"} aria-label="${esc(p.name)} available"></td>
         <td>${esc(p.name)}</td>
         <td class="num">${Math.round(app*100)}%</td>
         ${LINES.map(l => { const sh = s.w ? s.lines[l]/s.w : 0; return `<td class="num">${sh ? `<span class="${sh>=.5?"hot":""}">${Math.round(sh*100)}</span>` : "·"}</td>`; }).join("")}
         <td class="num">${s.won}–${s.lost}</td>
-        ${["ntrp","wtnD","utrD"].map(f => `<td class="num"><input class="rate" data-id="${p.id}" data-f="${f}" value="${p[f] ?? ""}" inputmode="decimal" aria-label="${esc(p.name)} ${f}"></td>`).join("")}
+        ${["ntrp","tr"].map(f => `<td class="num"><input class="rate" data-id="${p.id}" data-f="${f}" value="${p[f] ?? ""}" inputmode="decimal" aria-label="${esc(p.name)} ${f}"></td>`).join("")}
         <td><input class="pnote" data-id="${p.id}" value="${esc(p.note)}" placeholder="Lefty, big serve…" aria-label="${esc(p.name)} notes"></td>
         <td><button class="btn danger small del" data-id="${p.id}" aria-label="Remove ${esc(p.name)}">Remove</button></td>
       </tr>`).join("")}</tbody></table></div>` : `<div class="empty">No players yet. Add them under “Add data”.</div>`}
   </section>
   <section class="panel">
     <h3>Partnerships</h3>
-    <p class="muted small">Every pair that has played together, most-used first.${isUs ? " Pairs from the team lineup note are listed too." : ""}</p>
+    <p class="muted small">Every pair that has played together, most-used first.</p>
     ${(pairList.length || (isUs && team.knownPairs?.length)) ? `<div class="tbl"><table>
-      <thead><tr><th>Pair</th><th class="num">Matches</th><th class="num">W–L</th>${LINES.map(l=>`<th class="num">${l}</th>`).join("")}<th>Combo</th></tr></thead>
+      <thead><tr><th>Pair</th><th class="num">Matches</th><th class="num">W–L</th>${LINES.map(l=>`<th class="num">${l}</th>`).join("")}<th class="num">Avg TR</th><th>NTRP</th></tr></thead>
       <tbody>${(() => {
         const seen = new Set(), list = [];
         pairList.forEach(p => { seen.add([...p.ids].sort().join("|")); list.push(p); });
         if (isUs) (team.knownPairs||[]).forEach(ids => { const k=[...ids].sort().join("|"); if (!seen.has(k)) list.push({ids, lines:{}, w:0, won:0, lost:0, n:0}); });
         return list.map(p => { const c = combo(team,p.ids); return `<tr><td>${pairName(team,p.ids)}</td><td class="num">${p.n}</td><td class="num">${p.won}–${p.lost}</td>
           ${LINES.map(l => `<td class="num">${p.lines[l] ? Math.round(p.lines[l]/p.w*100) : "·"}</td>`).join("")}
-          <td class="${c.cls}">${c.txt}</td></tr>`; }).join("");
+          <td class="num">${fmt(pairRating(team,p.ids).tr,2)}</td><td class="${c.cls}">${c.txt}</td></tr>`; }).join("");
       })()}</tbody></table></div>` : `<div class="empty">No partnerships yet — they appear once matches are added.</div>`}
   </section>`;
-  v.querySelectorAll("th[data-k]").forEach(h => h.onclick = () => { if (sortKey===h.dataset.k) sortDir*=-1; else { sortKey=h.dataset.k; sortDir = h.dataset.k==="wtnD"||h.dataset.k==="name" ? 1 : -1; } render(); });
+  v.querySelectorAll("th[data-k]").forEach(h => h.onclick = () => { if (sortKey===h.dataset.k) sortDir*=-1; else { sortKey=h.dataset.k; sortDir = h.dataset.k==="name" ? 1 : -1; } render(); });
   v.querySelectorAll(".inout").forEach(c => c.onchange = () => { playerById(team,c.dataset.id).out = !c.checked; save(current); render(); });
   v.querySelectorAll("input.rate").forEach(i => i.onchange = () => { playerById(team,i.dataset.id)[i.dataset.f] = num(i.value); save(current); render(); });
   v.querySelectorAll("input.pnote").forEach(i => i.onchange = () => { playerById(team,i.dataset.id).note = i.value.trim(); save(current); });
@@ -471,7 +528,6 @@ function renderRoster(v, team){
   }));
 }
 
-// two-tap confirm (dialogs are blocked in this frame)
 function armConfirm(btn, label, fn){
   if (btn.dataset.armed){ fn(); return; }
   const old = btn.textContent; btn.dataset.armed = "1"; btn.textContent = label;
@@ -482,8 +538,8 @@ function renderMatches(v, team){
   const ms = [...team.matches].sort((a,b) => (b.date||"").localeCompare(a.date||""));
   v.innerHTML = `<section class="panel"><h2>Match history</h2>
     ${ms.length ? ms.map(m => `<div class="match">
-      <div><span class="pill ${m.stage}">${STAGES[m.stage]}</span> <b>${esc(m.date||"No date")}</b> vs ${esc(m.opponent||"—")}
-        <div class="small muted">${m.lines.filter(l=>l.players?.length).map(l => `${l.line}: ${pairName(team,l.players)}${l.result?` (${l.result})`:""}`).join(" · ")}</div></div>
+      <div><span class="pill ${m.stage}">${STAGES[m.stage]}</span> <b>${esc(m.date||"No date")}</b> vs ${esc(m.opponent||"—")} ${m.pts ? `<b>${esc(m.pts)}</b>` : ""}
+        ${m.lines.filter(l=>l.players?.length).map(l => `<div class="small">${l.line}: <b>${pairName(team,l.players)}</b> ${l.result?`<span class="${l.result==="W"?"":"bad-t"}">${l.result}</span>`:""} ${esc(l.score||"")}${l.vs ? ` <span class="vsl">vs ${esc(l.vs)}</span>` : ""}</div>`).join("")}</div>
       <div class="row"><button class="btn ghost edit" data-id="${m.id}">Edit</button><button class="btn danger delm" data-id="${m.id}">Delete</button></div>
     </div>`).join("") : `<div class="empty">No matches yet. Add scorecards under “Add data”.</div>`}</section>`;
   v.querySelectorAll(".edit").forEach(b => b.onclick = () => {
@@ -502,21 +558,15 @@ function renderImport(v, team){
   const names = team.players.map(p => p.name);
   v.innerHTML = `
   <section class="panel">
-    <h2>Team details</h2>
-    ${current!=="us" ? wildNote() : ""}
-    <div class="row"><label>TennisLink team name <input type="text" id="tname" value="${esc(team.teamName)}" placeholder="e.g. Club name 18 9.5 Combo"></label></div>
-  </section>
-
-  <section class="panel">
     <h2>Roster and ratings</h2>
-    <p class="muted small">Paste one player per line: <code>Name, NTRP, WTN doubles, UTR doubles</code>. Missing ratings can be left blank. Existing players are updated, not duplicated.</p>
-    <textarea id="rosterPaste" placeholder="Jordan Reyes, 5.0, 13.8, 10.4&#10;Sam Okafor, 4.5, , 9.6"></textarea>
+    <p class="muted small">Paste one player per line: <code>Name, NTRP, TennisRecord rating</code>. Missing ratings can be left blank. Existing players are updated, not duplicated.</p>
+    <textarea id="rosterPaste" placeholder="Jordan Reyes, 5.0, 4.82&#10;Sam Okafor, 4.5, "></textarea>
     <div class="row" style="margin-top:8px"><button class="btn" id="rosterSave">Update roster</button><span class="small muted" id="rosterMsg"></span></div>
   </section>
 
   <section class="panel editor">
     <h2>${draft.id ? "Edit match" : "Add a match"}</h2>
-    ${sample ? `<p class="muted small">Paste a scorecard copied from TennisLink or TennisRecord and Claude will fill in the courts below for you to check. Or fill them in by hand.</p>
+    ${sample ? `<p class="muted small">Paste a scorecard copied from NorCal TennisLink or TennisRecord and Claude will fill in the courts for you to check. Or fill them in by hand.</p>
       <textarea id="scPaste" placeholder="Paste the full scorecard text here"></textarea>
       <div class="row" style="margin:8px 0 14px"><button class="btn ghost" id="parse">Fill in from scorecard</button><span class="small muted" id="parseMsg"></span></div>` : ""}
     <div class="row" style="margin-bottom:10px">
@@ -533,13 +583,12 @@ function renderImport(v, team){
     <div class="row" style="margin-top:10px"><button class="btn" id="msave">${draft.id ? "Save changes" : "Save match"}</button><button class="btn ghost" id="mclear">Clear</button><span class="small muted" id="mMsg"></span></div>
   </section>`;
 
-  v.querySelector("#tname").onchange = e => { team.teamName = e.target.value.trim(); save(current); };
   v.querySelector("#rosterSave").onclick = () => {
     let n = 0;
     v.querySelector("#rosterPaste").value.split(/\n/).forEach(line => {
       const c = line.split(/[,\t]/).map(s => s.trim()); if (!c[0]) return;
       const id = ensurePlayer(team, c[0]), p = playerById(team,id);
-      [["ntrp",1],["wtnD",2],["utrD",3]].forEach(([f,i]) => { if (num(c[i]) != null) p[f] = num(c[i]); });
+      [["ntrp",1],["tr",2]].forEach(([f,i]) => { if (num(c[i]) != null) p[f] = num(c[i]); });
       n++;
     });
     save(current); v.querySelector("#rosterMsg").textContent = `Updated ${n} player${n===1?"":"s"}.`;
@@ -554,8 +603,9 @@ function renderImport(v, team){
   v.querySelector("#msave").onclick = () => {
     syncDraft();
     if (!draft.names.some(n => n.some(Boolean))){ v.querySelector("#mMsg").textContent = "Add at least one player before saving."; return; }
-    const m = {id: draft.id || ("m"+Date.now().toString(36)), date:draft.date, stage:draft.stage, opponent:draft.opponent,
-      lines: LINES.map((l,i) => ({line:l, players: draft.names[i].filter(Boolean).map(n => ensurePlayer(team,n)), result: draft.lines[i].result}))};
+    const prev = team.matches.find(x => x.id === draft.id);
+    const m = {...(prev||{}), id: draft.id || ("m"+Date.now().toString(36)), date:draft.date, stage:draft.stage, opponent:draft.opponent,
+      lines: LINES.map((l,i) => ({...(prev?.lines.find(x=>x.line===l)||{}), line:l, players: draft.names[i].filter(Boolean).map(n => ensurePlayer(team,n)), result: draft.lines[i].result}))};
     const idx = team.matches.findIndex(x => x.id === m.id);
     if (idx >= 0) team.matches[idx] = m; else team.matches.push(m);
     save(current); draft = newDraft(); tab = "matches"; render();
@@ -568,7 +618,7 @@ function renderImport(v, team){
     try {
       const out = await sample.json(
 `You extract USTA League 9.5 Combo Doubles team match scorecards into JSON. Combo matches have three doubles courts (D1, D2, D3). The team we care about is "${team.teamName || teamLabel(current)}". Known players on that team: ${names.join("; ") || "unknown"}.
-Return ONLY JSON: {"date":"YYYY-MM-DD or empty","stage":"regular|playoff|sectional","opponent":"other team's name","lines":[{"line":"D1|D2|D3","players":["full names of OUR team's two players only"],"result":"W|L|"}]}.
+Return ONLY JSON: {"date":"YYYY-MM-DD or empty","stage":"regular|playoff|sectional","opponent":"other team's name","lines":[{"line":"D1|D2|D3","players":["full names (First Last) of OUR team's two players only"],"result":"W|L|"}]}.
 Use "result" from our team's perspective. Match player names to the known list when they are clearly the same person. If stage is unclear, use "regular". Include only lines that appear.
 
 Scorecard:
@@ -582,13 +632,9 @@ ${raw.slice(0, 12000)}`, {modelTier:"default"});
   };
 }
 
-function wildNote(){
-  const t = TEAMS.find(x=>x.id===current);
-  return t.wild ? `<p class="note">${esc(t.label)} has <b>two</b> 9.5 teams at Sectionals: one in Flight 1, one (a wildcard) in our Flight 2. Make sure scorecards are for the team in Flight 2, and put its TennisLink name below.</p>` : "";
-}
 function emptyState(team){
   return `<section class="panel empty"><h2>No match history for ${esc(teamLabel(current))} yet</h2>
-    <p>Add their season and local-playoff scorecards and the projected lineup appears here.</p>
+    <p>${db ? "Add their scorecards and the projected lineup appears here." : "Sign in to claude.ai to load the shared scouting data."}</p>
     <button class="btn" id="goImport">Add data</button></section>`;
 }
 function bindEmpty(v){ const b = v.querySelector("#goImport"); if (b) b.onclick = () => { tab="import"; render(); }; }
