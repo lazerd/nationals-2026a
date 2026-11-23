@@ -132,7 +132,7 @@ textarea.notes{font-family:inherit;font-size:14px;min-height:110px}
     <div>
       <h1>Sunnyvale 9.5 Combo · Sectionals scouting</h1>
       <p>Men's 9.5 Flight 2 · Johnson Ranch Sports Club, Roseville · Jan 22–24, 2027 · Rain dates Feb 5–7</p>
-      <p class="small muted" style="margin:2px 0 0">Data: NorCal league scorecards + TennisRecord ratings, pulled Nov 22, 2026</p>
+      <p class="small muted" style="margin:2px 0 0">Data: NorCal league scorecards (Nov 22) · TennisRecord, TennisBump and WTN ratings</p>
     </div>
     <div class="sync" id="sync">Connecting…</div>
   </header>
@@ -163,11 +163,23 @@ const SLOTS = [
 const OPP = TEAMS.filter(t => t.id !== "us" && !t.pending);
 const SHOWN = TEAMS.filter(t => !t.pending);
 
+const METRICS = {
+  tb:  {label:"TennisBump",   short:"Bump", hi:true,  even:0.05, d:2, note:"TennisBump rating (NTRP-style, higher is stronger)"},
+  wtn: {label:"WTN doubles",  short:"WTN",  hi:false, even:1.0,  d:1, note:"World Tennis Number, doubles (lower is stronger)"},
+  tr:  {label:"TennisRecord", short:"TR",   hi:true,  even:0.05, d:2, note:"TennisRecord estimated dynamic rating (higher is stronger)"},
+};
+let metric = (() => { try { return localStorage.getItem("combo95:metric") || "tb"; } catch(e){ return "tb"; } })();
+if (!METRICS[metric]) metric = "tb";
 const slug = s => String(s).toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
-const newPlayer = name => ({id:slug(name), name:name.trim(), ntrp:null, tr:null, out:false, note:""});
+const newPlayer = name => ({id:slug(name), name:name.trim(), ntrp:null, tr:null, tb:null, wtn:null, out:false, note:""});
 const blankTeam = t => ({name:t.label, teamName:"", summary:"", players:[], matches:[], plan:{}, notes:"", knownPairs:[], weights:{regular:1,playoff:2,sectional:2,recent:1.5}});
 
-let db = null, sample = null;
+let db = null, sample = null, RAT = {};
+/* shared ratings doc: {teamId: {playerId: [tennisBump, wtnDoubles]}} — fills only ratings a player doesn't already have */
+function fillRatings(id){
+  const r = RAT[id]; if (!r) return;
+  state[id].players.forEach(p => { const x = r[p.id]; if (!x) return; if (p.tb == null && x[0] != null) p.tb = x[0]; if (p.wtn == null && x[1] != null) p.wtn = x[1]; });
+}
 const state = {}; TEAMS.forEach(t => state[t.id] = blankTeam(t));
 let current = "us", tab = "plan", sortKey = "tr", sortDir = -1, draft = null;
 
@@ -190,9 +202,13 @@ function setSync(t){ document.getElementById("sync").textContent = t; }
   try { sample = await window.claude?.use("sample"); } catch(e){ sample = null; }
   if (!db){ setSync("Offline copy — sign in to see the shared scouting data"); render(); return; }
   setSync("Live · shared with your team");
+  db.doc("ratings/all").onSnapshot(snap => {
+    if (snap.exists){ RAT = JSON.parse(JSON.stringify(snap.data())); TEAMS.forEach(t => fillRatings(t.id)); }
+    if (!isEditing()) render();
+  }, () => {});
   TEAMS.forEach(t => {
     db.doc("teams/"+t.id).onSnapshot(snap => {
-      if (snap.exists){ state[t.id] = Object.assign(blankTeam(t), JSON.parse(JSON.stringify(snap.data()))); lsSet(t.id, state[t.id]); }
+      if (snap.exists){ state[t.id] = Object.assign(blankTeam(t), JSON.parse(JSON.stringify(snap.data()))); fillRatings(t.id); lsSet(t.id, state[t.id]); }
       if (!isEditing()) render();
     }, () => setSync("Live sync paused — reload to reconnect"));
   });
@@ -228,14 +244,21 @@ function combo(team, ids){
 /* TennisRecord estimated dynamic rating: higher is stronger, comparable across areas */
 function pairRating(team, ids){
   const ps = ids.map(i => playerById(team,i)).filter(Boolean);
-  return { tr: ps.length===2 && ps.every(p=>p.tr!=null) ? (ps[0].tr+ps[1].tr)/2 : null };
+  const v = ps.length===2 && ps.every(p=>p[metric]!=null) ? (ps[0][metric]+ps[1][metric])/2 : null;
+  return { tr: v };
 }
-const trTxt = r => `TR ${r.tr==null ? "—" : r.tr.toFixed(2)}`;
+const M = () => METRICS[metric];
+const rv = v => v==null ? "—" : v.toFixed(M().d);
+const trTxt = r => `${M().short} ${rv(r.tr)}`;
 function edgeHtml(oR, tR){
   if (oR.tr == null || tR.tr == null) return `<div class="edge even">—</div>`;
-  const d = oR.tr - tR.tr;
-  return `<div class="edge ${Math.abs(d)<0.05?"even":d>0?"us":"them"}" title="Average TennisRecord rating, us minus them">${d>0?"+":""}${d.toFixed(2)}</div>`;
+  const d = (oR.tr - tR.tr) * (M().hi ? 1 : -1);
+  return `<div class="edge ${Math.abs(d)<M().even?"even":d>0?"us":"them"}" title="${M().label}: positive favors us">${d>0?"+":""}${d.toFixed(M().d)}</div>`;
 }
+function metricPicker(){
+  return `<div class="row small" style="margin:6px 0 10px"><span class="muted">Compare by</span>${Object.entries(METRICS).map(([k,m]) => `<button class="btn ${k===metric?"":"ghost"} mpick" data-m="${k}" style="padding:4px 10px">${m.label}</button>`).join("")}</div>`;
+}
+function bindMetric(v){ v.querySelectorAll(".mpick").forEach(b => b.onclick = () => { metric = b.dataset.m; try{ localStorage.setItem("combo95:metric", metric); }catch(e){} render(); }); }
 
 /* ---------- the model ---------- */
 function analyze(team){
@@ -300,13 +323,14 @@ function project(team){
 /* Strongest legal lineup: top-rated, combo-legal, eligible (2+ matches) players; pairs that have played together get a small bump */
 function strongest(team){
   const A = analyze(team);
-  const elig = team.players.filter(p => !p.out && p.tr != null && p.ntrp != null && (A.stats[p.id]?.matches || 0) >= 2);
+  const elig = team.players.filter(p => !p.out && p[metric] != null && p.ntrp != null && (A.stats[p.id]?.matches || 0) >= 2);
   const pairs = [];
   for (let i=0;i<elig.length;i++) for (let j=i+1;j<elig.length;j++){
     const a = elig[i], b = elig[j];
     if (a.ntrp + b.ntrp > LEVEL + 1e-9 || Math.abs(a.ntrp-b.ntrp) > MAX_GAP + 1e-9) continue;
     const k = [a.id,b.id].sort().join("|"), together = !!A.pairs[k];
-    pairs.push({ids:[a.id,b.id], tr:(a.tr+b.tr)/2, score:(a.tr+b.tr)/2 + (together?0.03:0), together});
+    const avgv = (a[metric]+b[metric])/2, sgn = M().hi ? 1 : -1, bump = M().hi ? 0.03 : 0.6;
+    pairs.push({ids:[a.id,b.id], tr:avgv, score:sgn*avgv + (together?bump:0), together});
   }
   pairs.sort((x,y)=>y.score-x.score);
   const top = pairs.slice(0,45); let best = null;
@@ -318,14 +342,14 @@ function strongest(team){
       if (!best || sc > best.sc) best = {sc, set:[top[i],top[j],top[k]]};
     }
   }
-  return best ? best.set.sort((x,y)=>y.tr-x.tr) : [];
+  return best ? best.set.sort((x,y)=>(y.tr-x.tr)*(M().hi?1:-1)) : [];
 }
 function strongestHtml(team){
   const st = strongest(team);
   if (!st.length) return "";
   return `<div class="lineup">${st.map((p,i) => `<div class="slot"><div class="ln">${LINES[i]}</div>
     <div><div class="who">${pairName(team,p.ids)}${p.together ? "" : `<span class="alt">Haven't played together this season</span>`}</div>
-    <div class="rt">${combo(team,p.ids).txt} · TR ${p.tr.toFixed(2)}</div></div><div></div></div>`).join("")}</div>`;
+    <div class="rt">${combo(team,p.ids).txt} · ${M().short} ${rv(p.tr)}</div></div><div></div></div>`).join("")}</div>`;
 }
 
 /* ---------- render ---------- */
@@ -408,6 +432,7 @@ function renderProjection(v, team){
   <section class="panel">
     <h3>If they stack their best: strongest legal lineup</h3>
     <p class="muted small">Their three highest-rated pairs that are Combo-legal, using only players eligible for post-season (2+ matches) who aren't marked out. Captains often stack at Sectionals, so plan for this too.</p>
+    ${metricPicker()}
     ${strongestHtml(team)}
   </section>
   <section class="panel">
@@ -420,6 +445,7 @@ function renderProjection(v, team){
       <div><label for="w-${k}">${l}: <b id="wv-${k}">${team.weights[k] ?? 1}×</b></label>
       <input type="range" id="w-${k}" min="${k==="recent"?1:0}" max="5" step="0.5" value="${team.weights[k] ?? 1}" data-k="${k}"></div>`).join("")}</div>
   </section>`;
+  bindMetric(v);
   v.querySelector("#onotes").onchange = e => { team.notes = e.target.value; save(current); };
   v.querySelectorAll("input[type=range]").forEach(r => {
     r.oninput = () => { document.getElementById("wv-"+r.dataset.k).textContent = r.value+"×"; };
@@ -449,7 +475,8 @@ function renderMatchup(v, team){
   v.innerHTML = `
   <section class="panel">
     <h2>Us vs ${esc(teamLabel(current))}</h2>
-    <p class="muted small">${esc(teamMeta(current).n)}. Pick a pair per court — one of our pairs from the first menu, or the two players yourself. The middle column is our pair's average TennisRecord rating minus theirs: green favors us, red favors them, within 0.05 is even.</p>
+    <p class="muted small">${esc(teamMeta(current).n)}. Pick a pair per court — one of our pairs from the first menu, or the two players yourself. The middle column is the rating gap between the pairs (${esc(M().note)}): green favors us, red favors them, within ${M().even} is even.</p>
+    ${metricPicker()}
     ${dupes.length ? `<p class="note bad-t">${dupes.map(i=>esc(nameOf(us,i))).join(", ")} ${dupes.length>1?"are":"is"} on more than one court.</p>` : ""}
     ${LINES.map(l => {
       const ours = plan[l] || [], theirs = lineup[l];
@@ -457,17 +484,18 @@ function renderMatchup(v, team){
       const oR = pairRating(us, oIds), tR = theirs ? pairRating(team, theirs.ids) : {tr:null};
       const oC = combo(us, oIds), tC = theirs ? combo(team, theirs.ids) : null;
       const curKey = [...oIds].sort().join("|");
-      const quick = `<select class="quick" data-l="${l}" aria-label="${l} pair"><option value="">Pick a pair…</option>${pairs.map(p => { const k=[...p].sort().join("|"), r=pairRating(us,p); return `<option value="${p.join("|")}" ${k===curKey?"selected":""}>${pairName(us,p)}${r.tr!=null?` · ${r.tr.toFixed(2)}`:""}</option>`; }).join("")}</select>`;
+      const quick = `<select class="quick" data-l="${l}" aria-label="${l} pair"><option value="">Pick a pair…</option>${pairs.map(p => { const k=[...p].sort().join("|"), r=pairRating(us,p); return `<option value="${p.join("|")}" ${k===curKey?"selected":""}>${pairName(us,p)}${r.tr!=null?` · ${rv(r.tr)}`:""}</option>`; }).join("")}</select>`;
       return `<div class="vs"><div class="ln">${l}</div>
         <div>${quick}<div class="row" style="margin-top:6px"><select data-l="${l}" data-i="0" aria-label="${l} player 1">${opts(ours[0])}</select><select data-l="${l}" data-i="1" aria-label="${l} player 2">${opts(ours[1])}</select></div>
           <div class="small muted"><span class="${oC.cls}">${oC.txt}</span> · ${trTxt(oR)}</div></div>
         ${edgeHtml(oR, tR)}
         <div class="theirs"><b>${theirs ? pairName(team, theirs.ids) : "—"}</b>
           <div class="small muted">${tC ? `<span class="${tC.cls}">${tC.txt}</span> · ` : ""}${trTxt(tR)}${theirs?.rec ? " · " + theirs.rec : ""}</div>
-          ${theirs?.alts?.length ? `<div class="small muted">Or: ${theirs.alts.map(a => `${pairName(team,a)} (${fmt(pairRating(team,a).tr,2)})`).join("; ")}</div>` : ""}
-          ${strong[LINES.indexOf(l)] ? `<div class="small muted">If stacked: ${pairName(team,strong[LINES.indexOf(l)].ids)} (${strong[LINES.indexOf(l)].tr.toFixed(2)})</div>` : ""}</div></div>`;
+          ${theirs?.alts?.length ? `<div class="small muted">Or: ${theirs.alts.map(a => `${pairName(team,a)} (${rv(pairRating(team,a).tr)})`).join("; ")}</div>` : ""}
+          ${strong[LINES.indexOf(l)] ? `<div class="small muted">If stacked: ${pairName(team,strong[LINES.indexOf(l)].ids)} (${rv(strong[LINES.indexOf(l)].tr)})</div>` : ""}</div></div>`;
     }).join("")}
   </section>`;
+  bindMetric(v);
   v.querySelectorAll("select.quick").forEach(s => s.onchange = () => { if (!s.value) return; plan[s.dataset.l] = s.value.split("|"); save("us"); render(); });
   v.querySelectorAll("select[data-i]").forEach(s => s.onchange = () => {
     const l = s.dataset.l, i = +s.dataset.i;
@@ -481,7 +509,7 @@ function renderRoster(v, team){
     const s = A.stats[p.id] || {w:0,lines:{},won:0,lost:0,matches:0};
     return {p, s, app: A.totalW ? s.w/A.totalW : 0};
   });
-  const key = {app:r=>r.app, name:r=>r.p.name.toLowerCase(), ntrp:r=>r.p.ntrp ?? 0, tr:r=>r.p.tr ?? 0, rec:r=>r.s.won-r.s.lost};
+  const key = {app:r=>r.app, name:r=>r.p.name.toLowerCase(), ntrp:r=>r.p.ntrp ?? 0, tr:r=>r.p.tr ?? 0, tb:r=>r.p.tb ?? 0, wtn:r=>-(r.p.wtn ?? 99), rec:r=>r.s.won-r.s.lost};
   rows.sort((a,b) => { const x=key[sortKey](a), y=key[sortKey](b); return (x>y?1:x<y?-1:0)*sortDir; });
   const th = (k,l,c="") => `<th class="${c}" data-k="${k}">${l}${sortKey===k?(sortDir>0?" ▲":" ▼"):""}</th>`;
   const pairList = Object.values(A.pairs).sort((a,b)=>b.w-a.w);
@@ -489,16 +517,16 @@ function renderRoster(v, team){
   v.innerHTML = `
   <section class="panel">
     <h2>${esc(teamLabel(current))} roster</h2>
-    <p class="muted small">TR is the TennisRecord estimated dynamic rating (higher is stronger). NTRP drives the Combo check: a pair must add to 9.5 or less, with partners within 1.0. Uncheck “Available” for anyone who can't play Sectionals for this team.</p>
+    <p class="muted small">Ratings: TennisBump and TR (TennisRecord) — higher is stronger; WTN doubles — lower is stronger. NTRP drives the Combo check: a pair must add to 9.5 or less, with partners within 1.0. Uncheck “Available” for anyone who can't play Sectionals for this team.</p>
     ${team.players.length ? `<div class="tbl"><table>
-      <thead><tr><th>Available</th>${th("name","Player")}${th("app","Played","num")}${LINES.map(l=>`<th class="num">${l}</th>`).join("")}${th("rec","W–L","num")}${th("ntrp","NTRP","num")}${th("tr","TR","num")}<th>Notes</th><th></th></tr></thead>
+      <thead><tr><th>Available</th>${th("name","Player")}${th("app","Played","num")}${LINES.map(l=>`<th class="num">${l}</th>`).join("")}${th("rec","W–L","num")}${th("ntrp","NTRP","num")}${th("tb","Bump","num")}${th("wtn","WTN D","num")}${th("tr","TR","num")}<th>Notes</th><th></th></tr></thead>
       <tbody>${rows.map(({p,s,app}) => `<tr class="${p.out?"out":""}">
         <td><input type="checkbox" data-id="${p.id}" class="inout" ${p.out?"":"checked"} aria-label="${esc(p.name)} available"></td>
         <td>${esc(p.name)}</td>
         <td class="num">${Math.round(app*100)}%</td>
         ${LINES.map(l => { const sh = s.w ? s.lines[l]/s.w : 0; return `<td class="num">${sh ? `<span class="${sh>=.5?"hot":""}">${Math.round(sh*100)}</span>` : "·"}</td>`; }).join("")}
         <td class="num">${s.won}–${s.lost}</td>
-        ${["ntrp","tr"].map(f => `<td class="num"><input class="rate" data-id="${p.id}" data-f="${f}" value="${p[f] ?? ""}" inputmode="decimal" aria-label="${esc(p.name)} ${f}"></td>`).join("")}
+        ${["ntrp","tb","wtn","tr"].map(f => `<td class="num"><input class="rate" data-id="${p.id}" data-f="${f}" value="${p[f] ?? ""}" inputmode="decimal" aria-label="${esc(p.name)} ${f}"></td>`).join("")}
         <td><input class="pnote" data-id="${p.id}" value="${esc(p.note)}" placeholder="Lefty, big serve…" aria-label="${esc(p.name)} notes"></td>
         <td><button class="btn danger small del" data-id="${p.id}" aria-label="Remove ${esc(p.name)}">Remove</button></td>
       </tr>`).join("")}</tbody></table></div>` : `<div class="empty">No players yet. Add them under “Add data”.</div>`}
@@ -507,14 +535,14 @@ function renderRoster(v, team){
     <h3>Partnerships</h3>
     <p class="muted small">Every pair that has played together, most-used first.</p>
     ${(pairList.length || (isUs && team.knownPairs?.length)) ? `<div class="tbl"><table>
-      <thead><tr><th>Pair</th><th class="num">Matches</th><th class="num">W–L</th>${LINES.map(l=>`<th class="num">${l}</th>`).join("")}<th class="num">Avg TR</th><th>NTRP</th></tr></thead>
+      <thead><tr><th>Pair</th><th class="num">Matches</th><th class="num">W–L</th>${LINES.map(l=>`<th class="num">${l}</th>`).join("")}<th class="num">Avg ${M().short}</th><th>NTRP</th></tr></thead>
       <tbody>${(() => {
         const seen = new Set(), list = [];
         pairList.forEach(p => { seen.add([...p.ids].sort().join("|")); list.push(p); });
         if (isUs) (team.knownPairs||[]).forEach(ids => { const k=[...ids].sort().join("|"); if (!seen.has(k)) list.push({ids, lines:{}, w:0, won:0, lost:0, n:0}); });
         return list.map(p => { const c = combo(team,p.ids); return `<tr><td>${pairName(team,p.ids)}</td><td class="num">${p.n}</td><td class="num">${p.won}–${p.lost}</td>
           ${LINES.map(l => `<td class="num">${p.lines[l] ? Math.round(p.lines[l]/p.w*100) : "·"}</td>`).join("")}
-          <td class="num">${fmt(pairRating(team,p.ids).tr,2)}</td><td class="${c.cls}">${c.txt}</td></tr>`; }).join("");
+          <td class="num">${rv(pairRating(team,p.ids).tr)}</td><td class="${c.cls}">${c.txt}</td></tr>`; }).join("");
       })()}</tbody></table></div>` : `<div class="empty">No partnerships yet — they appear once matches are added.</div>`}
   </section>`;
   v.querySelectorAll("th[data-k]").forEach(h => h.onclick = () => { if (sortKey===h.dataset.k) sortDir*=-1; else { sortKey=h.dataset.k; sortDir = h.dataset.k==="name" ? 1 : -1; } render(); });
@@ -561,8 +589,8 @@ function renderImport(v, team){
   v.innerHTML = `
   <section class="panel">
     <h2>Roster and ratings</h2>
-    <p class="muted small">Paste one player per line: <code>Name, NTRP, TennisRecord rating</code>. Missing ratings can be left blank. Existing players are updated, not duplicated.</p>
-    <textarea id="rosterPaste" placeholder="Jordan Reyes, 5.0, 4.82&#10;Sam Okafor, 4.5, "></textarea>
+    <p class="muted small">Paste one player per line: <code>Name, NTRP, TennisBump, WTN doubles, TennisRecord</code>. Missing ratings can be left blank. Existing players are updated, not duplicated.</p>
+    <textarea id="rosterPaste" placeholder="Jordan Reyes, 5.0, 4.95, 18.2, 4.82&#10;Sam Okafor, 4.5, 4.60, , "></textarea>
     <div class="row" style="margin-top:8px"><button class="btn" id="rosterSave">Update roster</button><span class="small muted" id="rosterMsg"></span></div>
   </section>
 
@@ -590,7 +618,7 @@ function renderImport(v, team){
     v.querySelector("#rosterPaste").value.split(/\n/).forEach(line => {
       const c = line.split(/[,\t]/).map(s => s.trim()); if (!c[0]) return;
       const id = ensurePlayer(team, c[0]), p = playerById(team,id);
-      [["ntrp",1],["tr",2]].forEach(([f,i]) => { if (num(c[i]) != null) p[f] = num(c[i]); });
+      [["ntrp",1],["tb",2],["wtn",3],["tr",4]].forEach(([f,i]) => { if (num(c[i]) != null) p[f] = num(c[i]); });
       n++;
     });
     save(current); v.querySelector("#rosterMsg").textContent = `Updated ${n} player${n===1?"":"s"}.`;
