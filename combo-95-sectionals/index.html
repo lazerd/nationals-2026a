@@ -200,7 +200,16 @@ function setSync(t){ document.getElementById("sync").textContent = t; }
 (async () => {
   try { db = await window.claude?.use("db"); } catch(e){ db = null; }
   try { sample = await window.claude?.use("sample"); } catch(e){ sample = null; }
-  if (!db){ setSync("Offline copy — sign in to see the shared scouting data"); render(); return; }
+  if (!db){
+    // Standalone (e.g. Vercel): load the published snapshot; anything edited here stays on this device
+    try {
+      const snap = await (await fetch("data.json", {cache:"no-cache"})).json();
+      RAT = snap.ratings || {};
+      TEAMS.forEach(t => { if (!lsGet(t.id) && snap.teams?.[t.id]) state[t.id] = Object.assign(blankTeam(t), snap.teams[t.id]); fillRatings(t.id); });
+      setSync("Scouting snapshot · " + (snap.asOf || "") + " · your edits stay on this device");
+    } catch(e){ setSync("Offline copy — open the shared link to see the scouting data"); }
+    render(); return;
+  }
   setSync("Live · shared with your team");
   db.doc("ratings/all").onSnapshot(snap => {
     if (snap.exists){ RAT = JSON.parse(JSON.stringify(snap.data())); TEAMS.forEach(t => fillRatings(t.id)); }
